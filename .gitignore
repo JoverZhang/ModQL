@@ -1,0 +1,6 @@
+/target
+/tests/fixtures/simple/target/
+/tmp
+.DS_Store
+*.swp
+*.swo
