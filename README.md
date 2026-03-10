@@ -27,7 +27,15 @@ cargo +nightly rustdoc  ──>  rustdoc JSON  ──>  modql  ──>  Markdown
 ## Usage
 
 ```
-modql generate --manifest-path path/to/Cargo.toml --out docs/
+modql generate --manifest-path path/to/Cargo.toml
+```
+
+By default, ModQL writes generated files to `docs/modql`.
+
+To override the output directory:
+
+```
+modql generate --manifest-path path/to/Cargo.toml --out docs/custom
 ```
 
 ### Options
@@ -35,7 +43,7 @@ modql generate --manifest-path path/to/Cargo.toml --out docs/
 | Flag | Description |
 |------|-------------|
 | `--manifest-path <path>` | Path to the crate's `Cargo.toml` (required) |
-| `--out <dir>` | Output directory for Markdown files (required) |
+| `--out <dir>` | Output directory for Markdown files (default: `docs/modql`) |
 | `--package <name>` | Package name, for workspaces |
 | `--document-private-items` | Include private items |
 | `--nightly <toolchain>` | Nightly toolchain name (default: `nightly`) |

@@ -23,4 +23,3 @@ This crate is used as a fixture to test the documentation generator.
 ## Functions
 
 - [`run`](function.simple.run.md) - Run the application and return a status message.
-

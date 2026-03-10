@@ -20,7 +20,7 @@ pub enum Command {
         manifest_path: PathBuf,
 
         /// Output directory for generated Markdown files
-        #[arg(long)]
+        #[arg(long, default_value = "docs/modql")]
         out: PathBuf,
 
         /// Package name (for workspaces)
