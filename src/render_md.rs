@@ -34,7 +34,6 @@ impl ViewKind {
             Self::Internal => naming::internal_module_file_name(qualified_name),
         }
     }
-
 }
 
 /// Render all documentation pages to the output directory.
@@ -135,17 +134,7 @@ fn render_crate_page(
         out.push('\n');
     }
 
-    render_body_sections(
-        &mut out,
-        &crate_doc.structs,
-        &crate_doc.enums,
-        &crate_doc.traits,
-        &crate_doc.impls,
-        &crate_doc.functions,
-        &crate_doc.type_aliases,
-        &crate_doc.constants,
-        &crate_doc.statics,
-    );
+    render_body_sections(&mut out, crate_doc, view);
 
     out
 }
@@ -157,7 +146,12 @@ fn render_module_page(
 ) -> String {
     let mut out = String::new();
 
-    let _ = writeln!(out, "# {}Module `{}`", view.title_prefix(), module.qualified_name);
+    let _ = writeln!(
+        out,
+        "# {}Module `{}`",
+        view.title_prefix(),
+        module.qualified_name
+    );
     out.push('\n');
     let has_surface = surface_modules.contains(&module.qualified_name);
     render_view_link(&mut out, Some(&module.qualified_name), view, has_surface);
@@ -172,17 +166,7 @@ fn render_module_page(
         out.push('\n');
     }
 
-    render_body_sections(
-        &mut out,
-        &module.structs,
-        &module.enums,
-        &module.traits,
-        &module.impls,
-        &module.functions,
-        &module.type_aliases,
-        &module.constants,
-        &module.statics,
-    );
+    render_module_sections(&mut out, module, view);
 
     out
 }
@@ -245,7 +229,10 @@ fn render_module_listing(
                 naming::internal_module_file_name(&module.qualified_name)
             ),
             ViewKind::Internal if surface_modules.contains(&module.qualified_name) => {
-                format!("[surface]({})", naming::module_file_name(&module.qualified_name))
+                format!(
+                    "[surface]({})",
+                    naming::module_file_name(&module.qualified_name)
+                )
             }
             ViewKind::Internal => "-".to_string(),
         };
@@ -257,7 +244,104 @@ fn render_module_listing(
     }
 }
 
-fn render_body_sections(
+fn render_body_sections(out: &mut String, crate_doc: &CrateDoc, view: ViewKind) {
+    match view {
+        ViewKind::Surface => render_surface_sections(
+            out,
+            &crate_doc.structs,
+            &crate_doc.enums,
+            &crate_doc.traits,
+            &crate_doc.impls,
+            &crate_doc.functions,
+            &crate_doc.type_aliases,
+            &crate_doc.constants,
+            &crate_doc.statics,
+        ),
+        ViewKind::Internal => render_internal_sections(
+            out,
+            &crate_doc.structs,
+            &crate_doc.enums,
+            &crate_doc.traits,
+            &crate_doc.impls,
+            &crate_doc.functions,
+            &crate_doc.type_aliases,
+            &crate_doc.constants,
+            &crate_doc.statics,
+        ),
+    }
+}
+
+fn render_module_sections(out: &mut String, module: &ModuleDoc, view: ViewKind) {
+    match view {
+        ViewKind::Surface => render_surface_sections(
+            out,
+            &module.structs,
+            &module.enums,
+            &module.traits,
+            &module.impls,
+            &module.functions,
+            &module.type_aliases,
+            &module.constants,
+            &module.statics,
+        ),
+        ViewKind::Internal => render_internal_sections(
+            out,
+            &module.structs,
+            &module.enums,
+            &module.traits,
+            &module.impls,
+            &module.functions,
+            &module.type_aliases,
+            &module.constants,
+            &module.statics,
+        ),
+    }
+}
+
+fn render_surface_sections(
+    out: &mut String,
+    structs: &[StructDoc],
+    enums: &[EnumDoc],
+    traits: &[TraitDoc],
+    impls: &[ImplDoc],
+    functions: &[FunctionDoc],
+    type_aliases: &[TypeAliasDoc],
+    constants: &[ConstantDoc],
+    statics: &[StaticDoc],
+) {
+    render_types_summary_section(out, structs, enums, traits);
+    render_signature_block_section(
+        out,
+        "Functions",
+        functions
+            .iter()
+            .map(|function| (None, function.signature.as_str())),
+        false,
+    );
+    render_impl_headers_section(out, impls);
+    render_signature_block_section(
+        out,
+        "Type Aliases",
+        type_aliases
+            .iter()
+            .map(|item| (None, item.signature.as_str())),
+        false,
+    );
+    render_signature_block_section(
+        out,
+        "Constants",
+        constants.iter().map(|item| (None, item.signature.as_str())),
+        false,
+    );
+    render_signature_block_section(
+        out,
+        "Statics",
+        statics.iter().map(|item| (None, item.signature.as_str())),
+        false,
+    );
+}
+
+fn render_internal_sections(
     out: &mut String,
     structs: &[StructDoc],
     enums: &[EnumDoc],
@@ -276,6 +360,56 @@ fn render_body_sections(
     render_type_aliases_section(out, type_aliases);
     render_constants_section(out, constants);
     render_statics_section(out, statics);
+}
+
+fn render_types_summary_section(
+    out: &mut String,
+    structs: &[StructDoc],
+    enums: &[EnumDoc],
+    traits: &[TraitDoc],
+) {
+    let mut lines = Vec::new();
+    lines.extend(
+        traits
+            .iter()
+            .map(|item| summarize_type_signature(&item.signature, TypeKind::Trait)),
+    );
+    lines.extend(
+        structs
+            .iter()
+            .map(|item| summarize_type_signature(&item.signature, TypeKind::Struct)),
+    );
+    lines.extend(
+        enums
+            .iter()
+            .map(|item| summarize_type_signature(&item.signature, TypeKind::Enum)),
+    );
+
+    if lines.is_empty() {
+        return;
+    }
+
+    let _ = writeln!(out, "## Types\n");
+    let _ = writeln!(out, "```rust");
+    for line in lines {
+        let _ = writeln!(out, "{line}");
+    }
+    let _ = writeln!(out, "```");
+    out.push('\n');
+}
+
+fn render_impl_headers_section(out: &mut String, impls: &[ImplDoc]) {
+    if impls.is_empty() {
+        return;
+    }
+
+    let _ = writeln!(out, "## Impl Blocks\n");
+    let _ = writeln!(out, "```rust");
+    for impl_doc in impls {
+        let _ = writeln!(out, "{}", ensure_decl_terminated(&impl_doc.header));
+    }
+    let _ = writeln!(out, "```");
+    out.push('\n');
 }
 
 fn render_structs_section(out: &mut String, structs: &[StructDoc]) {
@@ -333,7 +467,11 @@ fn render_impls_section(out: &mut String, impls: &[ImplDoc]) {
 
     let _ = writeln!(out, "## Impl Blocks\n");
     for impl_doc in impls {
-        let _ = writeln!(out, "### `{}`\n", impl_doc.header.lines().next().unwrap_or(&impl_doc.header));
+        let _ = writeln!(
+            out,
+            "### `{}`\n",
+            impl_doc.header.lines().next().unwrap_or(&impl_doc.header)
+        );
         if let Some(ref docs) = impl_doc.docs {
             render_docs_paragraph(out, docs);
         }
@@ -358,25 +496,44 @@ fn render_functions_section(out: &mut String, functions: &[FunctionDoc]) {
 }
 
 fn render_type_aliases_section(out: &mut String, items: &[TypeAliasDoc]) {
-    render_signature_block_section(out, "Type Aliases", items.iter().map(|item| {
-        (item.docs.as_deref(), item.signature.as_str())
-    }));
+    render_signature_block_section(
+        out,
+        "Type Aliases",
+        items
+            .iter()
+            .map(|item| (item.docs.as_deref(), item.signature.as_str())),
+        true,
+    );
 }
 
 fn render_constants_section(out: &mut String, items: &[ConstantDoc]) {
-    render_signature_block_section(out, "Constants", items.iter().map(|item| {
-        (item.docs.as_deref(), item.signature.as_str())
-    }));
+    render_signature_block_section(
+        out,
+        "Constants",
+        items
+            .iter()
+            .map(|item| (item.docs.as_deref(), item.signature.as_str())),
+        true,
+    );
 }
 
 fn render_statics_section(out: &mut String, items: &[StaticDoc]) {
-    render_signature_block_section(out, "Statics", items.iter().map(|item| {
-        (item.docs.as_deref(), item.signature.as_str())
-    }));
+    render_signature_block_section(
+        out,
+        "Statics",
+        items
+            .iter()
+            .map(|item| (item.docs.as_deref(), item.signature.as_str())),
+        true,
+    );
 }
 
-fn render_signature_block_section<'a, I>(out: &mut String, title: &str, items: I)
-where
+fn render_signature_block_section<'a, I>(
+    out: &mut String,
+    title: &str,
+    items: I,
+    include_docs: bool,
+) where
     I: IntoIterator<Item = (Option<&'a str>, &'a str)>,
 {
     let items: Vec<_> = items.into_iter().collect();
@@ -387,12 +544,53 @@ where
     let _ = writeln!(out, "## {title}\n");
     let _ = writeln!(out, "```rust");
     for (docs, signature) in items {
-        write_doc_comments(out, docs, "");
-        let _ = writeln!(out, "{signature}");
+        if include_docs {
+            write_doc_comments(out, docs, "");
+        }
+        let rendered = if include_docs {
+            signature.to_string()
+        } else {
+            ensure_decl_terminated(signature)
+        };
+        let _ = writeln!(out, "{rendered}");
         out.push('\n');
     }
     let _ = writeln!(out, "```");
     out.push('\n');
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum TypeKind {
+    Struct,
+    Enum,
+    Trait,
+}
+
+fn summarize_type_signature(signature: &str, kind: TypeKind) -> String {
+    let trimmed = signature.trim();
+    let body_delim = match kind {
+        TypeKind::Struct => find_decl_delimiter(trimmed).unwrap_or(trimmed.len()),
+        TypeKind::Enum | TypeKind::Trait => trimmed.find('{').unwrap_or(trimmed.len()),
+    };
+    let summary = trimmed[..body_delim].trim_end();
+    let mut summary = summary.to_string();
+    if !summary.ends_with(';') {
+        summary.push(';');
+    }
+    summary
+}
+
+fn find_decl_delimiter(signature: &str) -> Option<usize> {
+    let mut generic_depth = 0;
+    for (idx, ch) in signature.char_indices() {
+        match ch {
+            '<' => generic_depth += 1,
+            '>' if generic_depth > 0 => generic_depth -= 1,
+            '{' | '(' if generic_depth == 0 => return Some(idx),
+            _ => {}
+        }
+    }
+    None
 }
 
 fn render_impl_block(impl_doc: &ImplDoc) -> String {
@@ -445,7 +643,12 @@ fn write_doc_comments(out: &mut String, docs: Option<&str>, indent: &str) {
 fn render_field_notes(out: &mut String, fields: &[FieldDoc]) {
     let documented: Vec<_> = fields
         .iter()
-        .filter(|field| field.docs.as_ref().is_some_and(|docs| !docs.trim().is_empty()))
+        .filter(|field| {
+            field
+                .docs
+                .as_ref()
+                .is_some_and(|docs| !docs.trim().is_empty())
+        })
         .collect();
     if documented.is_empty() {
         return;
@@ -453,7 +656,12 @@ fn render_field_notes(out: &mut String, fields: &[FieldDoc]) {
 
     let _ = writeln!(out, "#### Fields\n");
     for field in documented {
-        let docs = field.docs.as_deref().unwrap_or("").trim().replace('\n', " ");
+        let docs = field
+            .docs
+            .as_deref()
+            .unwrap_or("")
+            .trim()
+            .replace('\n', " ");
         let _ = writeln!(out, "- `{}`: {}", field.name, docs);
     }
     out.push('\n');
@@ -462,7 +670,12 @@ fn render_field_notes(out: &mut String, fields: &[FieldDoc]) {
 fn render_variant_notes(out: &mut String, variants: &[VariantDoc]) {
     let documented: Vec<_> = variants
         .iter()
-        .filter(|variant| variant.docs.as_ref().is_some_and(|docs| !docs.trim().is_empty()))
+        .filter(|variant| {
+            variant
+                .docs
+                .as_ref()
+                .is_some_and(|docs| !docs.trim().is_empty())
+        })
         .collect();
     if documented.is_empty() {
         return;
@@ -484,7 +697,12 @@ fn render_variant_notes(out: &mut String, variants: &[VariantDoc]) {
 fn render_method_notes(out: &mut String, methods: &[MethodDoc]) {
     let documented: Vec<_> = methods
         .iter()
-        .filter(|method| method.docs.as_ref().is_some_and(|docs| !docs.trim().is_empty()))
+        .filter(|method| {
+            method
+                .docs
+                .as_ref()
+                .is_some_and(|docs| !docs.trim().is_empty())
+        })
         .collect();
     if documented.is_empty() {
         return;
@@ -492,7 +710,12 @@ fn render_method_notes(out: &mut String, methods: &[MethodDoc]) {
 
     let _ = writeln!(out, "#### Methods\n");
     for method in documented {
-        let docs = method.docs.as_deref().unwrap_or("").trim().replace('\n', " ");
+        let docs = method
+            .docs
+            .as_deref()
+            .unwrap_or("")
+            .trim()
+            .replace('\n', " ");
         let _ = writeln!(out, "- `{}`: {}", method.name, docs);
     }
     out.push('\n');
@@ -529,7 +752,10 @@ mod tests {
     fn test_crate_page_no_items() {
         let doc = empty_crate_doc("mycrate");
         let page = render_crate_page(&doc, ViewKind::Surface, &BTreeSet::new());
-        assert_eq!(page, "# Crate `mycrate`\n\n[Internal view](index.internal.md)\n\n");
+        assert_eq!(
+            page,
+            "# Crate `mycrate`\n\n[Internal view](index.internal.md)\n\n"
+        );
     }
 
     #[test]
@@ -578,9 +804,68 @@ mod tests {
     #[test]
     fn test_ensure_decl_terminated() {
         assert_eq!(ensure_decl_terminated("pub fn run()"), "pub fn run();");
-        assert_eq!(
-            ensure_decl_terminated("pub fn run();"),
-            "pub fn run();"
-        );
+        assert_eq!(ensure_decl_terminated("pub fn run();"), "pub fn run();");
+    }
+
+    #[test]
+    fn test_surface_page_uses_summary_sections() {
+        let mut doc = empty_crate_doc("mycrate");
+        doc.structs.push(StructDoc {
+            qualified_name: "mycrate::Greeter".to_string(),
+            docs: Some("Greeter docs.".to_string()),
+            signature: "pub struct Greeter {\n    pub name: String,\n}".to_string(),
+            fields: vec![FieldDoc {
+                name: "name".to_string(),
+                type_str: "String".to_string(),
+                docs: Some("Field docs.".to_string()),
+                is_public: true,
+            }],
+        });
+        doc.functions.push(FunctionDoc {
+            qualified_name: "mycrate::run".to_string(),
+            docs: Some("Run docs.".to_string()),
+            signature: "pub fn run() -> String".to_string(),
+        });
+        doc.impls.push(ImplDoc {
+            header: "impl Greeter".to_string(),
+            docs: Some("Impl docs.".to_string()),
+            target_name: "Greeter".to_string(),
+            methods: vec![MethodDoc {
+                name: "new".to_string(),
+                docs: Some("Method docs.".to_string()),
+                signature: "pub fn new(name: &str) -> Self".to_string(),
+            }],
+        });
+
+        let page = render_crate_page(&doc, ViewKind::Surface, &BTreeSet::new());
+        assert!(page.contains("## Types"));
+        assert!(page.contains("pub struct Greeter;"));
+        assert!(page.contains("pub fn run() -> String;"));
+        assert!(page.contains("impl Greeter;"));
+        assert!(!page.contains("Field docs."));
+        assert!(!page.contains("Method docs."));
+        assert!(!page.contains("#### Fields"));
+    }
+
+    #[test]
+    fn test_internal_page_keeps_detailed_sections() {
+        let mut doc = empty_crate_doc("mycrate");
+        doc.structs.push(StructDoc {
+            qualified_name: "mycrate::Greeter".to_string(),
+            docs: Some("Greeter docs.".to_string()),
+            signature: "pub struct Greeter {\n    pub name: String,\n}".to_string(),
+            fields: vec![FieldDoc {
+                name: "name".to_string(),
+                type_str: "String".to_string(),
+                docs: Some("Field docs.".to_string()),
+                is_public: true,
+            }],
+        });
+
+        let page = render_crate_page(&doc, ViewKind::Internal, &BTreeSet::new());
+        assert!(page.contains("## Structs"));
+        assert!(page.contains("Greeter docs."));
+        assert!(page.contains("#### Fields"));
+        assert!(page.contains("Field docs."));
     }
 }

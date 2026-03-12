@@ -137,29 +137,61 @@ fn test_generate_simple_fixture_matches_golden() {
     let index_content = read_file(&out_dir.join("index.md"));
     assert!(
         !index_content.contains("secret: String"),
-        "Private struct field should not be exported by default"
+        "Surface view should not expand private struct fields"
     );
     assert!(
         !index_content.contains("display_name"),
-        "Private inherent method should not be exported by default"
+        "Surface view should not expand private inherent methods"
     );
     assert!(
         !index_content.contains("pub(crate) fn secret"),
-        "Restricted inherent method should not be exported by default"
+        "Surface view should not expand restricted inherent methods"
     );
     assert!(
-        index_content.contains("impl Greeter"),
-        "Public surface should include inherent impl blocks"
+        index_content.contains("pub(crate) fn internal_status() -> &'static str;"),
+        "Surface view should include root private free functions as declarations"
     );
     assert!(
-        index_content.contains("impl Render for Greeter"),
-        "Public surface should include local trait impl blocks"
+        index_content.contains("[`utils`](module.simple.utils.md)"),
+        "Root surface should include private root modules in the module table"
+    );
+    assert!(
+        index_content.contains("pub struct Greeter;"),
+        "Surface view should summarize root types"
+    );
+    assert!(
+        index_content.contains("pub trait Render;"),
+        "Surface view should summarize root traits"
+    );
+    assert!(
+        index_content.contains("pub enum Format;"),
+        "Surface view should summarize root enums"
+    );
+    assert!(
+        index_content.contains("impl Greeter;"),
+        "Surface view should include inherent impl headers"
+    );
+    assert!(
+        index_content.contains("impl Render for Greeter;"),
+        "Surface view should include trait impl headers"
+    );
+    assert!(
+        !index_content.contains("pub fn greet(&self) -> String;"),
+        "Surface view should not expand impl methods"
+    );
+    assert!(
+        !index_content.contains("/// Resolve an internal status string for diagnostics."),
+        "Surface view should omit per-item doc comments"
     );
 
     let module_content = read_file(&out_dir.join("module.simple.utils.md"));
     assert!(
         !module_content.contains("internal_helper"),
-        "Private module function should not be exported by default"
+        "Nested module surface should still exclude private functions"
+    );
+    assert!(
+        !module_content.contains("/// A helper function that formats a value."),
+        "Nested module surface should omit per-item doc comments"
     );
 
     // Verify no old per-item files are generated
@@ -219,6 +251,10 @@ fn test_generate_simple_fixture_writes_internal_view_with_private_items() {
     assert!(
         index_content.contains("pub(crate) fn secret(&self) -> &str;"),
         "Internal view should include restricted inherent methods"
+    );
+    assert!(
+        index_content.contains("pub(crate) fn internal_status() -> &'static str;"),
+        "Internal view should include private root free functions"
     );
 
     let module_content = read_file(&out_dir.join("module.simple.utils.internal.md"));

@@ -1,5 +1,7 @@
 # Internal Module `modql::rustdoc_json`
 
+[Surface view](module.modql.rustdoc_json.md)
+
 ## Structs
 
 ### `RustdocOptions`

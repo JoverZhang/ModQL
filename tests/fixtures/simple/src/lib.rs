@@ -2,7 +2,7 @@
 //!
 //! This crate is used as a fixture to test the documentation generator.
 
-pub mod utils;
+mod utils;
 
 /// A greeting struct that holds a name.
 pub struct Greeter {
@@ -56,6 +56,11 @@ impl Render for Greeter {
     fn render(&self) -> String {
         self.greet()
     }
+}
+
+/// Resolve an internal status string for diagnostics.
+fn internal_status() -> &'static str {
+    "internal"
 }
 
 /// Run the application and return a status message.

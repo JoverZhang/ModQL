@@ -1,5 +1,7 @@
 # Internal Module `modql::model`
 
+[Surface view](module.modql.model.md)
+
 ## Structs
 
 ### `ConstantDoc`

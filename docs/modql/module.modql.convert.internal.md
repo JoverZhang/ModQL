@@ -1,5 +1,18 @@
 # Internal Module `modql::convert`
 
+[Surface view](module.modql.convert.md)
+
+## Structs
+
+### `CollectPolicy`
+
+```rust
+pub(in ::convert) struct CollectPolicy {
+    include_private_items: bool,
+    include_private_members: bool,
+}
+```
+
 ## Enums
 
 ### `ConvertMode`
@@ -35,6 +48,51 @@ pub(in ::convert) trait ItemContainer {
 
 ## Impl Blocks
 
+### `impl Clone for CollectPolicy`
+
+```rust
+impl Clone for CollectPolicy {
+    fn clone(&self) -> CollectPolicy;
+
+}
+```
+
+### `impl Copy for CollectPolicy`
+
+```rust
+impl Copy for CollectPolicy;
+```
+
+### `impl Debug for CollectPolicy`
+
+```rust
+impl Debug for CollectPolicy {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result;
+
+}
+```
+
+### `impl Eq for CollectPolicy`
+
+```rust
+impl Eq for CollectPolicy;
+```
+
+### `impl PartialEq for CollectPolicy`
+
+```rust
+impl PartialEq for CollectPolicy {
+    fn eq(&self, other: &CollectPolicy) -> bool;
+
+}
+```
+
+### `impl StructuralPartialEq for CollectPolicy`
+
+```rust
+impl StructuralPartialEq for CollectPolicy;
+```
+
 ### `impl Clone for ConvertMode`
 
 ```rust
@@ -51,6 +109,10 @@ impl ConvertMode {
     pub(in ::convert) fn include_private_items(self) -> bool;
 
     pub(in ::convert) fn include_private_members(self) -> bool;
+
+    pub(in ::convert) fn nested_policy(self) -> CollectPolicy;
+
+    pub(in ::convert) fn root_policy(self) -> CollectPolicy;
 
 }
 ```
@@ -144,12 +206,12 @@ impl ItemContainer for ModuleDoc {
 ## Functions
 
 ```rust
-pub(in ::convert) fn collect_assoc_impl_docs(krate: &Crate, impl_ids: &[Id], mode: ConvertMode) -> Vec<ImplDoc>;
+pub(in ::convert) fn collect_assoc_impl_docs(krate: &Crate, impl_ids: &[Id], mode: ConvertMode, policy: CollectPolicy) -> Vec<ImplDoc>;
 
 /// Collect enum variants with their fields resolved from the rustdoc index.
 pub(in ::convert) fn collect_enum_variants(krate: &Crate, e: &Enum) -> Vec<VariantDoc>;
 
-pub(in ::convert) fn collect_impl_doc(krate: &Crate, item: &Item, impl_: &Impl, mode: ConvertMode) -> Option<ImplDoc>;
+pub(in ::convert) fn collect_impl_doc(krate: &Crate, item: &Item, impl_: &Impl, mode: ConvertMode, policy: CollectPolicy) -> Option<ImplDoc>;
 
 /// Collect struct fields with their types resolved from the rustdoc index.
 pub(in ::convert) fn collect_struct_fields(krate: &Crate, s: &Struct, show_members: bool, include_private_members: bool) -> Vec<FieldDoc>;
@@ -161,7 +223,7 @@ pub(in ::convert) fn collect_trait_methods(krate: &Crate, trait_: &Trait, show_m
 pub fn convert(krate: &Crate, mode: ConvertMode) -> Result<CrateDoc>;
 
 /// Dispatch an item into the appropriate collection on the container.
-pub(in ::convert) fn dispatch_item<C: ItemContainer>(krate: &Crate, item: &Item, parent_path: &str, container: &mut C, mode: ConvertMode);
+pub(in ::convert) fn dispatch_item<C: ItemContainer>(krate: &Crate, item: &Item, parent_path: &str, container: &mut C, mode: ConvertMode, policy: CollectPolicy);
 
 pub(in ::convert) fn is_public_visibility(visibility: &Visibility) -> bool;
 
@@ -210,7 +272,7 @@ pub(in ::convert) fn render_where_clause(generics: &Generics) -> String;
 /// but preserve paths like "Vec" as-is.
 pub(in ::convert) fn short_type_path(path: &str) -> String;
 
-pub(in ::convert) fn should_include_impl(krate: &Crate, impl_: &Impl, mode: ConvertMode) -> bool;
+pub(in ::convert) fn should_include_impl(krate: &Crate, impl_: &Impl, mode: ConvertMode, policy: CollectPolicy) -> bool;
 
 pub(in ::convert) fn should_include_item(item: &Item, include_private_items: bool) -> bool;
 

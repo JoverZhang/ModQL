@@ -1,5 +1,7 @@
 # Internal Module `modql::naming`
 
+[Surface view](module.modql.naming.md)
+
 ## Functions
 
 ```rust

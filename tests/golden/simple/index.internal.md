@@ -98,7 +98,11 @@ impl Render for Greeter {
 ## Functions
 
 ```rust
+/// Resolve an internal status string for diagnostics.
+pub(crate) fn internal_status() -> &'static str;
+
 /// Run the application and return a status message.
 pub fn run() -> String;
 
 ```
+

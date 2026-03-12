@@ -12,86 +12,27 @@ This crate is used as a fixture to test the documentation generator.
 |---|---|---|
 | [`utils`](module.simple.utils.md) | Utility functions for the simple crate. | [internal](module.simple.utils.internal.md) |
 
-## Structs
-
-### `Greeter`
-
-A greeting struct that holds a name.
+## Types
 
 ```rust
-pub struct Greeter {
-    pub name: String,
-    // some fields omitted
-}
-```
-
-#### Fields
-
-- `name`: The name to greet.
-
-## Enums
-
-### `Format`
-
-Supported output formats.
-
-```rust
-pub enum Format {
-    Plain,
-    Rich,
-}
-```
-
-#### Variants
-
-- `Plain`: Plain text output.
-- `Rich`: Rich text output with formatting.
-
-## Traits
-
-### `Render`
-
-A trait for types that can render themselves.
-
-```rust
-pub trait Render {
-    fn render(&self) -> String;
-}
-```
-
-#### Methods
-
-- `render`: Render the value to a string.
-
-## Impl Blocks
-
-### `impl Greeter`
-
-```rust
-impl Greeter {
-    /// Generate a greeting message.
-    pub fn greet(&self) -> String;
-
-    /// Create a new `Greeter` with the given name.
-    pub fn new(name: &str) -> Self;
-
-}
-```
-
-### `impl Render for Greeter`
-
-```rust
-impl Render for Greeter {
-    /// Render the current greeting.
-    fn render(&self) -> String;
-
-}
+pub trait Render;
+pub struct Greeter;
+pub enum Format;
 ```
 
 ## Functions
 
 ```rust
-/// Run the application and return a status message.
+pub(crate) fn internal_status() -> &'static str;
+
 pub fn run() -> String;
 
 ```
+
+## Impl Blocks
+
+```rust
+impl Greeter;
+impl Render for Greeter;
+```
+

@@ -1,5 +1,7 @@
 # Internal Module `modql::cli`
 
+[Surface view](module.modql.cli.md)
+
 ## Structs
 
 ### `Cli`

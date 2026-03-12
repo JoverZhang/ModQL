@@ -25,6 +25,26 @@ impl ConvertMode {
     fn include_private_members(self) -> bool {
         matches!(self, Self::Internal)
     }
+
+    fn root_policy(self) -> CollectPolicy {
+        CollectPolicy {
+            include_private_items: true,
+            include_private_members: true,
+        }
+    }
+
+    fn nested_policy(self) -> CollectPolicy {
+        CollectPolicy {
+            include_private_items: self.include_private_items(),
+            include_private_members: self.include_private_members(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct CollectPolicy {
+    include_private_items: bool,
+    include_private_members: bool,
 }
 
 /// Convert a rustdoc JSON `Crate` into our internal `CrateDoc` model.
@@ -61,7 +81,14 @@ pub fn convert(krate: &Crate, mode: ConvertMode) -> Result<CrateDoc> {
 
     for item_id in &root_module.items {
         if let Some(item) = krate.index.get(item_id) {
-            dispatch_item(krate, item, &crate_name, &mut crate_doc, mode);
+            dispatch_item(
+                krate,
+                item,
+                &crate_name,
+                &mut crate_doc,
+                mode,
+                mode.root_policy(),
+            );
         }
     }
 
@@ -184,13 +211,14 @@ fn dispatch_item<C: ItemContainer>(
     parent_path: &str,
     container: &mut C,
     mode: ConvertMode,
+    policy: CollectPolicy,
 ) {
     let name = match &item.name {
         Some(n) => n.as_str(),
         None => return,
     };
 
-    if !should_include_item(item, mode.include_private_items()) {
+    if !should_include_item(item, policy.include_private_items) {
         return;
     }
 
@@ -220,6 +248,7 @@ fn dispatch_item<C: ItemContainer>(
                         &qualified,
                         &mut module_doc,
                         mode,
+                        mode.nested_policy(),
                     );
                 }
             }
@@ -228,13 +257,14 @@ fn dispatch_item<C: ItemContainer>(
             container.modules_mut().push(module_doc);
         }
         ItemEnum::Struct(s) => {
-            let show_members = mode.include_private_members() || is_public_visibility(&item.visibility);
+            let show_members =
+                policy.include_private_members || is_public_visibility(&item.visibility);
             let fields =
-                collect_struct_fields(krate, s, show_members, mode.include_private_members());
+                collect_struct_fields(krate, s, show_members, policy.include_private_members);
             let sig = render_struct_sig(name, s, &fields, &item.visibility);
             container
                 .impls_mut()
-                .extend(collect_assoc_impl_docs(krate, &s.impls, mode));
+                .extend(collect_assoc_impl_docs(krate, &s.impls, mode, policy));
             container.structs_mut().push(StructDoc {
                 qualified_name: qualified,
                 docs: item.docs.clone(),
@@ -247,7 +277,7 @@ fn dispatch_item<C: ItemContainer>(
             let sig = render_enum_sig(name, e, &variants, &item.visibility);
             container
                 .impls_mut()
-                .extend(collect_assoc_impl_docs(krate, &e.impls, mode));
+                .extend(collect_assoc_impl_docs(krate, &e.impls, mode, policy));
             container.enums_mut().push(EnumDoc {
                 qualified_name: qualified,
                 docs: item.docs.clone(),
@@ -256,16 +286,16 @@ fn dispatch_item<C: ItemContainer>(
             });
         }
         ItemEnum::Trait(t) => {
-            let show_members = mode.include_private_members() || is_public_visibility(&item.visibility);
-            let methods = collect_trait_methods(
-                krate,
-                t,
-                show_members,
-            );
+            let show_members =
+                policy.include_private_members || is_public_visibility(&item.visibility);
+            let methods = collect_trait_methods(krate, t, show_members);
             let sig = render_trait_sig(name, t, &methods, &item.visibility);
-            container
-                .impls_mut()
-                .extend(collect_assoc_impl_docs(krate, &t.implementations, mode));
+            container.impls_mut().extend(collect_assoc_impl_docs(
+                krate,
+                &t.implementations,
+                mode,
+                policy,
+            ));
             container.traits_mut().push(TraitDoc {
                 qualified_name: qualified,
                 docs: item.docs.clone(),
@@ -306,7 +336,7 @@ fn dispatch_item<C: ItemContainer>(
             });
         }
         ItemEnum::Impl(impl_) => {
-            if let Some(doc) = collect_impl_doc(krate, item, impl_, mode) {
+            if let Some(doc) = collect_impl_doc(krate, item, impl_, mode, policy) {
                 container.impls_mut().push(doc);
             }
         }
@@ -493,8 +523,10 @@ fn collect_impl_doc(
     item: &Item,
     impl_: &rustdoc_types::Impl,
     mode: ConvertMode,
+    policy: CollectPolicy,
 ) -> Option<ImplDoc> {
-    if item.span.is_none() || impl_.is_synthetic || !should_include_impl(krate, impl_, mode) {
+    if item.span.is_none() || impl_.is_synthetic || !should_include_impl(krate, impl_, mode, policy)
+    {
         return None;
     }
 
@@ -507,7 +539,7 @@ fn collect_impl_doc(
             continue;
         };
 
-        let include_method = if mode.include_private_members() || impl_.trait_.is_some() {
+        let include_method = if policy.include_private_members || impl_.trait_.is_some() {
             true
         } else {
             should_include_member_item(method_item, false)
@@ -537,8 +569,13 @@ fn collect_impl_doc(
     })
 }
 
-fn should_include_impl(krate: &Crate, impl_: &rustdoc_types::Impl, mode: ConvertMode) -> bool {
-    if mode.include_private_items() {
+fn should_include_impl(
+    krate: &Crate,
+    impl_: &rustdoc_types::Impl,
+    mode: ConvertMode,
+    policy: CollectPolicy,
+) -> bool {
+    if policy.include_private_items || mode.include_private_items() {
         return true;
     }
 
@@ -561,18 +598,24 @@ fn should_include_impl(krate: &Crate, impl_: &rustdoc_types::Impl, mode: Convert
 }
 
 fn item_is_public(krate: &Crate, id: &Id) -> bool {
-    krate.index
+    krate
+        .index
         .get(id)
         .map(|item| is_public_visibility(&item.visibility))
         .unwrap_or(true)
 }
 
-fn collect_assoc_impl_docs(krate: &Crate, impl_ids: &[Id], mode: ConvertMode) -> Vec<ImplDoc> {
+fn collect_assoc_impl_docs(
+    krate: &Crate,
+    impl_ids: &[Id],
+    mode: ConvertMode,
+    policy: CollectPolicy,
+) -> Vec<ImplDoc> {
     impl_ids
         .iter()
         .filter_map(|impl_id| krate.index.get(impl_id))
         .filter_map(|item| match &item.inner {
-            ItemEnum::Impl(impl_) => collect_impl_doc(krate, item, impl_, mode),
+            ItemEnum::Impl(impl_) => collect_impl_doc(krate, item, impl_, mode, policy),
             _ => None,
         })
         .collect()
@@ -767,7 +810,10 @@ fn render_enum_sig(
     let generics_str = render_generics(&e.generics);
     let where_clause = render_where_clause(&e.generics);
 
-    let mut sig = format!("{}enum {name}{generics_str}", render_visibility_prefix(visibility));
+    let mut sig = format!(
+        "{}enum {name}{generics_str}",
+        render_visibility_prefix(visibility)
+    );
     if !where_clause.is_empty() {
         sig.push_str(&format!("\nwhere\n{where_clause}"));
     }
@@ -878,7 +924,11 @@ fn render_impl_header(impl_: &rustdoc_types::Impl) -> String {
     header
 }
 
-fn render_type_alias_sig(name: &str, ta: &rustdoc_types::TypeAlias, visibility: &Visibility) -> String {
+fn render_type_alias_sig(
+    name: &str,
+    ta: &rustdoc_types::TypeAlias,
+    visibility: &Visibility,
+) -> String {
     let generics_str = render_generics(&ta.generics);
     let where_clause = render_where_clause(&ta.generics);
     let type_str = render_type(&ta.type_);
