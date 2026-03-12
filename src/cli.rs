@@ -27,10 +27,6 @@ pub enum Command {
         #[arg(long)]
         package: Option<String>,
 
-        /// Include private items in the documentation
-        #[arg(long)]
-        document_private_items: bool,
-
         /// Nightly toolchain to use (e.g. "nightly" or "nightly-2024-01-01")
         #[arg(long, default_value = "nightly")]
         nightly: String,

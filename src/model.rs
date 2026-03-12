@@ -9,6 +9,7 @@ pub struct CrateDoc {
     pub name: String,
     pub docs: Option<String>,
     pub modules: Vec<ModuleDoc>,
+    pub impls: Vec<ImplDoc>,
     pub structs: Vec<StructDoc>,
     pub enums: Vec<EnumDoc>,
     pub traits: Vec<TraitDoc>,
@@ -24,6 +25,7 @@ pub struct ModuleDoc {
     pub qualified_name: String,
     pub docs: Option<String>,
     pub modules: Vec<ModuleDoc>,
+    pub impls: Vec<ImplDoc>,
     pub structs: Vec<StructDoc>,
     pub enums: Vec<EnumDoc>,
     pub traits: Vec<TraitDoc>,
@@ -33,22 +35,50 @@ pub struct ModuleDoc {
     pub statics: Vec<StaticDoc>,
 }
 
-/// A struct with its inherent methods.
+/// A struct field with its type and documentation.
+#[derive(Debug, Clone)]
+pub struct FieldDoc {
+    pub name: String,
+    pub type_str: String,
+    pub docs: Option<String>,
+    pub is_public: bool,
+}
+
+/// Kind of enum variant.
+#[derive(Debug, Clone)]
+pub enum VariantKind {
+    /// A plain variant with no data (e.g. `Foo`).
+    Plain,
+    /// A tuple variant (e.g. `Foo(u32, String)`).
+    Tuple(Vec<String>),
+    /// A struct variant (e.g. `Foo { bar: u32 }`).
+    Struct(Vec<FieldDoc>),
+}
+
+/// An enum variant with its documentation.
+#[derive(Debug, Clone)]
+pub struct VariantDoc {
+    pub name: String,
+    pub docs: Option<String>,
+    pub kind: VariantKind,
+}
+
+/// A struct with its fields, inherent methods, and signature.
 #[derive(Debug, Clone)]
 pub struct StructDoc {
     pub qualified_name: String,
     pub docs: Option<String>,
     pub signature: String,
-    pub methods: Vec<MethodDoc>,
+    pub fields: Vec<FieldDoc>,
 }
 
-/// An enum with its inherent methods.
+/// An enum with its variants, inherent methods, and signature.
 #[derive(Debug, Clone)]
 pub struct EnumDoc {
     pub qualified_name: String,
     pub docs: Option<String>,
     pub signature: String,
-    pub methods: Vec<MethodDoc>,
+    pub variants: Vec<VariantDoc>,
 }
 
 /// A trait with its required and provided methods.
@@ -76,23 +106,35 @@ pub struct MethodDoc {
     pub signature: String,
 }
 
-/// A type alias.
+/// An impl block defined in a module.
+#[derive(Debug, Clone)]
+pub struct ImplDoc {
+    pub header: String,
+    pub docs: Option<String>,
+    pub methods: Vec<MethodDoc>,
+    pub target_name: String,
+}
+
+/// A type alias with its definition.
 #[derive(Debug, Clone)]
 pub struct TypeAliasDoc {
     pub qualified_name: String,
     pub docs: Option<String>,
+    pub signature: String,
 }
 
-/// A constant.
+/// A constant with its type and value.
 #[derive(Debug, Clone)]
 pub struct ConstantDoc {
     pub qualified_name: String,
     pub docs: Option<String>,
+    pub signature: String,
 }
 
-/// A static variable.
+/// A static variable with its type.
 #[derive(Debug, Clone)]
 pub struct StaticDoc {
     pub qualified_name: String,
     pub docs: Option<String>,
+    pub signature: String,
 }

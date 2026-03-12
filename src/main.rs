@@ -9,6 +9,7 @@ use anyhow::Result;
 use clap::Parser;
 
 use cli::{Cli, Command};
+use convert::ConvertMode;
 use rustdoc_json::RustdocOptions;
 
 fn main() -> Result<()> {
@@ -19,22 +20,23 @@ fn main() -> Result<()> {
             manifest_path,
             out,
             package,
-            document_private_items,
             nightly,
         } => {
             eprintln!("Generating rustdoc JSON...");
             let krate = rustdoc_json::generate_rustdoc_json(&RustdocOptions {
                 manifest_path,
                 package,
-                document_private_items,
                 nightly,
             })?;
 
-            eprintln!("Converting to documentation model...");
-            let crate_doc = convert::convert(&krate)?;
+            eprintln!("Converting public surface...");
+            let surface_doc = convert::convert(&krate, ConvertMode::Surface)?;
+
+            eprintln!("Converting internal view...");
+            let internal_doc = convert::convert(&krate, ConvertMode::Internal)?;
 
             eprintln!("Rendering Markdown to {}...", out.display());
-            render_md::render(&crate_doc, &out)?;
+            render_md::render(&surface_doc, &internal_doc, &out)?;
 
             eprintln!("Done. Documentation written to {}", out.display());
         }

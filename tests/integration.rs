@@ -65,6 +65,11 @@ fn test_generate_defaults_to_docs_modql() {
         "Expected default output file to exist: {}",
         out_dir.join("index.md").display()
     );
+    assert!(
+        out_dir.join("index.internal.md").exists(),
+        "Expected internal output file to exist: {}",
+        out_dir.join("index.internal.md").display()
+    );
 
     let _ = std::fs::remove_dir_all(&out_dir);
 }
@@ -98,12 +103,9 @@ fn test_generate_simple_fixture_matches_golden() {
 
     let expected_files = [
         "index.md",
+        "index.internal.md",
         "module.simple.utils.md",
-        "struct.simple.Greeter.md",
-        "enum.simple.Format.md",
-        "trait.simple.Render.md",
-        "function.simple.run.md",
-        "function.simple.utils.helper.md",
+        "module.simple.utils.internal.md",
     ];
 
     let golden = golden_dir();
@@ -131,4 +133,97 @@ fn test_generate_simple_fixture_matches_golden() {
             filename
         );
     }
+
+    let index_content = read_file(&out_dir.join("index.md"));
+    assert!(
+        !index_content.contains("secret: String"),
+        "Private struct field should not be exported by default"
+    );
+    assert!(
+        !index_content.contains("display_name"),
+        "Private inherent method should not be exported by default"
+    );
+    assert!(
+        !index_content.contains("pub(crate) fn secret"),
+        "Restricted inherent method should not be exported by default"
+    );
+    assert!(
+        index_content.contains("impl Greeter"),
+        "Public surface should include inherent impl blocks"
+    );
+    assert!(
+        index_content.contains("impl Render for Greeter"),
+        "Public surface should include local trait impl blocks"
+    );
+
+    let module_content = read_file(&out_dir.join("module.simple.utils.md"));
+    assert!(
+        !module_content.contains("internal_helper"),
+        "Private module function should not be exported by default"
+    );
+
+    // Verify no old per-item files are generated
+    let old_files = [
+        "struct.simple.Greeter.md",
+        "enum.simple.Format.md",
+        "trait.simple.Render.md",
+        "function.simple.run.md",
+        "function.simple.utils.helper.md",
+    ];
+    for filename in &old_files {
+        let path = out_dir.join(filename);
+        assert!(
+            !path.exists(),
+            "Old per-item file should not exist: {}",
+            path.display()
+        );
+    }
+}
+
+#[test]
+fn test_generate_simple_fixture_writes_internal_view_with_private_items() {
+    let out_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("target")
+        .join("test-output")
+        .join("simple-internal-view");
+    let _ = std::fs::remove_dir_all(&out_dir);
+
+    let manifest = fixture_manifest();
+    let manifest_str = manifest
+        .to_str()
+        .unwrap_or_else(|| panic!("Non-UTF8 manifest path: {}", manifest.display()));
+    let out_dir_str = out_dir
+        .to_str()
+        .unwrap_or_else(|| panic!("Non-UTF8 output path: {}", out_dir.display()));
+
+    run_modql(
+        &[
+            "generate",
+            "--manifest-path",
+            manifest_str,
+            "--out",
+            out_dir_str,
+        ],
+        Path::new(env!("CARGO_MANIFEST_DIR")),
+    );
+
+    let index_content = read_file(&out_dir.join("index.internal.md"));
+    assert!(
+        index_content.contains("secret: String"),
+        "Internal view should include private struct fields"
+    );
+    assert!(
+        index_content.contains("pub(crate) fn display_name(&self) -> &str;"),
+        "Internal view should include private inherent methods"
+    );
+    assert!(
+        index_content.contains("pub(crate) fn secret(&self) -> &str;"),
+        "Internal view should include restricted inherent methods"
+    );
+
+    let module_content = read_file(&out_dir.join("module.simple.utils.internal.md"));
+    assert!(
+        module_content.contains("fn internal_helper(value: &str) -> String"),
+        "Internal view should include private module functions"
+    );
 }

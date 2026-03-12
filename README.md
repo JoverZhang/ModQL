@@ -1,8 +1,11 @@
 # ModQL
 
-A docs.rs-like Markdown documentation generator for Rust projects, powered by rustdoc JSON.
+A Markdown documentation generator for Rust projects, powered by rustdoc JSON.
 
-ModQL reads the JSON output from `rustdoc` and produces a tree of Markdown files that mirror the structure you see on docs.rs: one page per crate, module, struct, enum, trait, and function.
+ModQL reads the JSON output from `rustdoc` and produces a paired set of Markdown files:
+
+- a public surface view that reads like a Rust header file
+- an internal view that also includes private symbols and their documentation comments
 
 ## Requirements
 
@@ -22,7 +25,7 @@ cargo +nightly rustdoc  ──>  rustdoc JSON  ──>  modql  ──>  Markdown
 1. `modql` invokes `cargo +nightly rustdoc -Z unstable-options --output-format json` on your crate
 2. Reads the generated rustdoc JSON file
 3. Converts it into an internal documentation model
-4. Renders docs.rs-like Markdown files
+4. Renders surface and internal Markdown views
 
 ## Usage
 
@@ -45,27 +48,23 @@ modql generate --manifest-path path/to/Cargo.toml --out docs/custom
 | `--manifest-path <path>` | Path to the crate's `Cargo.toml` (required) |
 | `--out <dir>` | Output directory for Markdown files (default: `docs/modql`) |
 | `--package <name>` | Package name, for workspaces |
-| `--document-private-items` | Include private items |
 | `--nightly <toolchain>` | Nightly toolchain name (default: `nightly`) |
 
 ## Example output
 
 ```
 docs/
-  index.md                         # Crate root page
-  module.mycrate.utils.md           # Module page
-  struct.mycrate.Greeter.md         # Struct page (with methods)
-  enum.mycrate.Format.md            # Enum page
-  trait.mycrate.Render.md           # Trait page (with methods)
-  function.mycrate.run.md           # Function page
+  index.md                           # Public surface view
+  index.internal.md                  # Internal view with private symbols
+  module.mycrate.utils.md            # Public module page
+  module.mycrate.utils.internal.md   # Internal module page
 ```
 
 Each page follows a consistent format:
 
-- **Crate page**: `# Crate \`name\`` with grouped listings of modules, structs, enums, traits, functions
-- **Module page**: `# Module \`crate::path\`` with its own item listings
-- **Type pages**: signature in a fenced `rust` code block, documentation, and methods
-- **Function page**: signature and documentation
+- **Surface pages**: public module/type/function declarations grouped like a header file
+- **Internal pages**: the same structure, plus private symbols and their comments
+- **Impl blocks**: rendered as first-class sections so inherent impls and `impl Trait for Type` are visible
 
 ## Building from source
 

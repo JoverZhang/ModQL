@@ -11,7 +11,7 @@ test:
 
 docs:
     mkdir -p docs/modql
-    cargo run -- generate --manifest-path Cargo.toml
+    cargo run -- generate --manifest-path Cargo.toml --out docs/modql
 
 all:
     just build

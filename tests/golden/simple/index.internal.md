@@ -1,6 +1,6 @@
-# Crate `simple`
+# Internal Crate `simple`
 
-[Internal view](index.internal.md)
+[Surface view](index.md)
 
 A simple test crate for ModQL.
 
@@ -8,9 +8,9 @@ This crate is used as a fixture to test the documentation generator.
 
 ## Modules
 
-| Module | Summary | Internal |
+| Module | Summary | Surface |
 |---|---|---|
-| [`utils`](module.simple.utils.md) | Utility functions for the simple crate. | [internal](module.simple.utils.internal.md) |
+| [`utils`](module.simple.utils.internal.md) | Utility functions for the simple crate. | [surface](module.simple.utils.md) |
 
 ## Structs
 
@@ -21,13 +21,14 @@ A greeting struct that holds a name.
 ```rust
 pub struct Greeter {
     pub name: String,
-    // some fields omitted
+    secret: String,
 }
 ```
 
 #### Fields
 
 - `name`: The name to greet.
+- `secret`: Internal state used only while formatting output.
 
 ## Enums
 
@@ -69,11 +70,17 @@ pub trait Render {
 
 ```rust
 impl Greeter {
+    /// Resolve the display name used in greeting output.
+    pub(crate) fn display_name(&self) -> &str;
+
     /// Generate a greeting message.
     pub fn greet(&self) -> String;
 
     /// Create a new `Greeter` with the given name.
     pub fn new(name: &str) -> Self;
+
+    /// Return the internal secret for debugging.
+    pub(crate) fn secret(&self) -> &str;
 
 }
 ```

@@ -7,7 +7,6 @@ use std::process::Command;
 pub struct RustdocOptions {
     pub manifest_path: PathBuf,
     pub package: Option<String>,
-    pub document_private_items: bool,
     pub nightly: String,
 }
 
@@ -82,9 +81,8 @@ fn invoke_cargo_rustdoc(opts: &RustdocOptions) -> Result<()> {
         cmd.arg("--package").arg(pkg);
     }
 
-    if opts.document_private_items {
-        cmd.arg("--document-private-items");
-    }
+    // Always include private items so we can generate both surface and internal views.
+    cmd.arg("--").arg("--document-private-items");
 
     let output = cmd.output().with_context(|| {
         format!(

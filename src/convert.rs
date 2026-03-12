@@ -2,16 +2,33 @@
 use anyhow::{Context, Result};
 use rustdoc_types::{
     Crate, GenericArg, GenericArgs, GenericBound, GenericParamDef, GenericParamDefKind, Id, Item,
-    ItemEnum, Term, Type, WherePredicate,
+    ItemEnum, Term, Type, Visibility, WherePredicate,
 };
 
 use crate::model::{
-    ConstantDoc, CrateDoc, EnumDoc, FunctionDoc, MethodDoc, ModuleDoc, StaticDoc, StructDoc,
-    TraitDoc, TypeAliasDoc,
+    ConstantDoc, CrateDoc, EnumDoc, FieldDoc, FunctionDoc, ImplDoc, MethodDoc, ModuleDoc,
+    StaticDoc, StructDoc, TraitDoc, TypeAliasDoc, VariantDoc, VariantKind,
 };
 
+/// Controls which symbols are included in the converted document tree.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConvertMode {
+    Surface,
+    Internal,
+}
+
+impl ConvertMode {
+    fn include_private_items(self) -> bool {
+        matches!(self, Self::Internal)
+    }
+
+    fn include_private_members(self) -> bool {
+        matches!(self, Self::Internal)
+    }
+}
+
 /// Convert a rustdoc JSON `Crate` into our internal `CrateDoc` model.
-pub fn convert(krate: &Crate) -> Result<CrateDoc> {
+pub fn convert(krate: &Crate, mode: ConvertMode) -> Result<CrateDoc> {
     let root_item = krate
         .index
         .get(&krate.root)
@@ -32,6 +49,7 @@ pub fn convert(krate: &Crate) -> Result<CrateDoc> {
         name: crate_name.clone(),
         docs: root_item.docs.clone(),
         modules: Vec::new(),
+        impls: Vec::new(),
         structs: Vec::new(),
         enums: Vec::new(),
         traits: Vec::new(),
@@ -43,7 +61,7 @@ pub fn convert(krate: &Crate) -> Result<CrateDoc> {
 
     for item_id in &root_module.items {
         if let Some(item) = krate.index.get(item_id) {
-            dispatch_item(krate, item, &crate_name, &mut crate_doc);
+            dispatch_item(krate, item, &crate_name, &mut crate_doc, mode);
         }
     }
 
@@ -57,6 +75,12 @@ fn sort_items(crate_doc: &mut CrateDoc) {
     crate_doc
         .modules
         .sort_by(|a, b| a.qualified_name.cmp(&b.qualified_name));
+    crate_doc.impls.sort_by(|a, b| {
+        a.target_name
+            .cmp(&b.target_name)
+            .then_with(|| a.header.cmp(&b.header))
+    });
+    crate_doc.impls.dedup_by(|a, b| a.header == b.header);
     crate_doc
         .structs
         .sort_by(|a, b| a.qualified_name.cmp(&b.qualified_name));
@@ -83,6 +107,7 @@ fn sort_items(crate_doc: &mut CrateDoc) {
 /// Container trait for dispatching items into the right collection.
 trait ItemContainer {
     fn modules_mut(&mut self) -> &mut Vec<ModuleDoc>;
+    fn impls_mut(&mut self) -> &mut Vec<ImplDoc>;
     fn structs_mut(&mut self) -> &mut Vec<StructDoc>;
     fn enums_mut(&mut self) -> &mut Vec<EnumDoc>;
     fn traits_mut(&mut self) -> &mut Vec<TraitDoc>;
@@ -95,6 +120,9 @@ trait ItemContainer {
 impl ItemContainer for CrateDoc {
     fn modules_mut(&mut self) -> &mut Vec<ModuleDoc> {
         &mut self.modules
+    }
+    fn impls_mut(&mut self) -> &mut Vec<ImplDoc> {
+        &mut self.impls
     }
     fn structs_mut(&mut self) -> &mut Vec<StructDoc> {
         &mut self.structs
@@ -122,6 +150,9 @@ impl ItemContainer for CrateDoc {
 impl ItemContainer for ModuleDoc {
     fn modules_mut(&mut self) -> &mut Vec<ModuleDoc> {
         &mut self.modules
+    }
+    fn impls_mut(&mut self) -> &mut Vec<ImplDoc> {
+        &mut self.impls
     }
     fn structs_mut(&mut self) -> &mut Vec<StructDoc> {
         &mut self.structs
@@ -152,11 +183,16 @@ fn dispatch_item<C: ItemContainer>(
     item: &Item,
     parent_path: &str,
     container: &mut C,
+    mode: ConvertMode,
 ) {
     let name = match &item.name {
         Some(n) => n.as_str(),
         None => return,
     };
+
+    if !should_include_item(item, mode.include_private_items()) {
+        return;
+    }
 
     let qualified = format!("{parent_path}::{name}");
 
@@ -166,6 +202,7 @@ fn dispatch_item<C: ItemContainer>(
                 qualified_name: qualified.clone(),
                 docs: item.docs.clone(),
                 modules: Vec::new(),
+                impls: Vec::new(),
                 structs: Vec::new(),
                 enums: Vec::new(),
                 traits: Vec::new(),
@@ -177,7 +214,13 @@ fn dispatch_item<C: ItemContainer>(
 
             for child_id in &m.items {
                 if let Some(child) = krate.index.get(child_id) {
-                    dispatch_item(krate, child, &qualified, &mut module_doc);
+                    dispatch_item(
+                        krate,
+                        child,
+                        &qualified,
+                        &mut module_doc,
+                        mode,
+                    );
                 }
             }
 
@@ -185,28 +228,44 @@ fn dispatch_item<C: ItemContainer>(
             container.modules_mut().push(module_doc);
         }
         ItemEnum::Struct(s) => {
-            let sig = render_struct_sig(name, s, item);
-            let methods = collect_inherent_methods(krate, &item.id);
+            let show_members = mode.include_private_members() || is_public_visibility(&item.visibility);
+            let fields =
+                collect_struct_fields(krate, s, show_members, mode.include_private_members());
+            let sig = render_struct_sig(name, s, &fields, &item.visibility);
+            container
+                .impls_mut()
+                .extend(collect_assoc_impl_docs(krate, &s.impls, mode));
             container.structs_mut().push(StructDoc {
                 qualified_name: qualified,
                 docs: item.docs.clone(),
                 signature: sig,
-                methods,
+                fields,
             });
         }
         ItemEnum::Enum(e) => {
-            let sig = render_enum_sig(krate, name, e, item);
-            let methods = collect_inherent_methods(krate, &item.id);
+            let variants = collect_enum_variants(krate, e);
+            let sig = render_enum_sig(name, e, &variants, &item.visibility);
+            container
+                .impls_mut()
+                .extend(collect_assoc_impl_docs(krate, &e.impls, mode));
             container.enums_mut().push(EnumDoc {
                 qualified_name: qualified,
                 docs: item.docs.clone(),
                 signature: sig,
-                methods,
+                variants,
             });
         }
         ItemEnum::Trait(t) => {
-            let sig = render_trait_sig(name, t, item);
-            let methods = collect_trait_methods(krate, t);
+            let show_members = mode.include_private_members() || is_public_visibility(&item.visibility);
+            let methods = collect_trait_methods(
+                krate,
+                t,
+                show_members,
+            );
+            let sig = render_trait_sig(name, t, &methods, &item.visibility);
+            container
+                .impls_mut()
+                .extend(collect_assoc_impl_docs(krate, &t.implementations, mode));
             container.traits_mut().push(TraitDoc {
                 qualified_name: qualified,
                 docs: item.docs.clone(),
@@ -215,36 +274,44 @@ fn dispatch_item<C: ItemContainer>(
             });
         }
         ItemEnum::Function(f) => {
-            let sig = render_function_sig(name, f);
+            let sig = render_function_sig(name, f, &item.visibility);
             container.functions_mut().push(FunctionDoc {
                 qualified_name: qualified,
                 docs: item.docs.clone(),
                 signature: sig,
             });
         }
-        ItemEnum::TypeAlias(_ta) => {
+        ItemEnum::TypeAlias(ta) => {
+            let sig = render_type_alias_sig(name, ta, &item.visibility);
             container.type_aliases_mut().push(TypeAliasDoc {
                 qualified_name: qualified,
                 docs: item.docs.clone(),
+                signature: sig,
             });
         }
-        ItemEnum::Constant {
-            type_: _,
-            const_: _,
-        } => {
+        ItemEnum::Constant { type_, const_ } => {
+            let sig = render_constant_sig(name, type_, const_, &item.visibility);
             container.constants_mut().push(ConstantDoc {
                 qualified_name: qualified,
                 docs: item.docs.clone(),
+                signature: sig,
             });
         }
-        ItemEnum::Static(_s) => {
+        ItemEnum::Static(s) => {
+            let sig = render_static_sig(name, s, &item.visibility);
             container.statics_mut().push(StaticDoc {
                 qualified_name: qualified,
                 docs: item.docs.clone(),
+                signature: sig,
             });
         }
+        ItemEnum::Impl(impl_) => {
+            if let Some(doc) = collect_impl_doc(krate, item, impl_, mode) {
+                container.impls_mut().push(doc);
+            }
+        }
         _ => {
-            // Skip items we don't handle in the MVP (Use, Union, etc.)
+            // Skip items we don't handle (Use, Union, etc.)
         }
     }
 }
@@ -252,6 +319,12 @@ fn dispatch_item<C: ItemContainer>(
 fn sort_module_items(m: &mut ModuleDoc) {
     m.modules
         .sort_by(|a, b| a.qualified_name.cmp(&b.qualified_name));
+    m.impls.sort_by(|a, b| {
+        a.target_name
+            .cmp(&b.target_name)
+            .then_with(|| a.header.cmp(&b.header))
+    });
+    m.impls.dedup_by(|a, b| a.header == b.header);
     m.structs
         .sort_by(|a, b| a.qualified_name.cmp(&b.qualified_name));
     m.enums
@@ -268,57 +341,253 @@ fn sort_module_items(m: &mut ModuleDoc) {
         .sort_by(|a, b| a.qualified_name.cmp(&b.qualified_name));
 }
 
+fn should_include_item(item: &Item, include_private_items: bool) -> bool {
+    should_include_visibility(&item.visibility, include_private_items)
+}
+
+fn should_include_visibility(visibility: &Visibility, include_private_items: bool) -> bool {
+    include_private_items || is_public_visibility(visibility)
+}
+
+fn is_public_visibility(visibility: &Visibility) -> bool {
+    matches!(visibility, Visibility::Public)
+}
+
+fn should_include_member_item(item: &Item, include_private_members: bool) -> bool {
+    include_private_members || is_public_visibility(&item.visibility)
+}
+
 // ---------------------------------------------------------------------------
-// Inherent and trait method collection
+// Struct field collection
 // ---------------------------------------------------------------------------
 
-/// Find all inherent impl methods for a given type (by its Id).
-fn collect_inherent_methods(krate: &Crate, type_id: &Id) -> Vec<MethodDoc> {
-    let mut methods = Vec::new();
+/// Collect struct fields with their types resolved from the rustdoc index.
+fn collect_struct_fields(
+    krate: &Crate,
+    s: &rustdoc_types::Struct,
+    show_members: bool,
+    include_private_members: bool,
+) -> Vec<FieldDoc> {
+    if !show_members {
+        return Vec::new();
+    }
 
-    for item in krate.index.values() {
-        if let ItemEnum::Impl(impl_) = &item.inner {
-            // Only inherent impls (no trait)
-            if impl_.trait_.is_some() {
-                continue;
-            }
-            // Check if this impl is for our type
-            if !impl_is_for_type(krate, impl_, type_id) {
-                continue;
-            }
-            for method_id in &impl_.items {
-                if let Some(method_item) = krate.index.get(method_id) {
-                    if let ItemEnum::Function(f) = &method_item.inner {
-                        let method_name = method_item.name.as_deref().unwrap_or("_");
-                        methods.push(MethodDoc {
-                            name: method_name.to_string(),
-                            docs: method_item.docs.clone(),
-                            signature: render_function_sig(method_name, f),
+    match &s.kind {
+        rustdoc_types::StructKind::Plain {
+            fields,
+            has_stripped_fields: _,
+        } => {
+            let mut field_docs = Vec::new();
+            for field_id in fields {
+                if let Some(field_item) = krate.index.get(field_id) {
+                    if !should_include_member_item(field_item, include_private_members) {
+                        continue;
+                    }
+                    if let ItemEnum::StructField(ty) = &field_item.inner {
+                        let field_name = field_item.name.as_deref().unwrap_or("_").to_string();
+                        field_docs.push(FieldDoc {
+                            name: field_name,
+                            type_str: render_type(ty),
+                            docs: field_item.docs.clone(),
+                            is_public: is_public_visibility(&field_item.visibility),
                         });
                     }
                 }
             }
+            field_docs
+        }
+        rustdoc_types::StructKind::Tuple(fields) => {
+            let mut field_docs = Vec::new();
+            for (i, field_opt) in fields.iter().enumerate() {
+                if let Some(field_id) = field_opt {
+                    if let Some(field_item) = krate.index.get(field_id) {
+                        if !should_include_member_item(field_item, include_private_members) {
+                            continue;
+                        }
+                        if let ItemEnum::StructField(ty) = &field_item.inner {
+                            field_docs.push(FieldDoc {
+                                name: format!("{i}"),
+                                type_str: render_type(ty),
+                                docs: field_item.docs.clone(),
+                                is_public: is_public_visibility(&field_item.visibility),
+                            });
+                        }
+                    }
+                }
+            }
+            field_docs
+        }
+        rustdoc_types::StructKind::Unit => Vec::new(),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Enum variant collection
+// ---------------------------------------------------------------------------
+
+/// Collect enum variants with their fields resolved from the rustdoc index.
+fn collect_enum_variants(krate: &Crate, e: &rustdoc_types::Enum) -> Vec<VariantDoc> {
+    let mut variants = Vec::new();
+
+    for variant_id in &e.variants {
+        if let Some(variant_item) = krate.index.get(variant_id) {
+            let variant_name = variant_item.name.as_deref().unwrap_or("_").to_string();
+            if let ItemEnum::Variant(v) = &variant_item.inner {
+                let kind = match &v.kind {
+                    rustdoc_types::VariantKind::Plain => VariantKind::Plain,
+                    rustdoc_types::VariantKind::Tuple(fields) => {
+                        let mut type_strs = Vec::new();
+                        for field_opt in fields {
+                            if let Some(field_id) = field_opt {
+                                if let Some(field_item) = krate.index.get(field_id) {
+                                    if let ItemEnum::StructField(ty) = &field_item.inner {
+                                        type_strs.push(render_type(ty));
+                                    } else {
+                                        type_strs.push("_".to_string());
+                                    }
+                                } else {
+                                    type_strs.push("_".to_string());
+                                }
+                            } else {
+                                type_strs.push("_".to_string());
+                            }
+                        }
+                        VariantKind::Tuple(type_strs)
+                    }
+                    rustdoc_types::VariantKind::Struct {
+                        fields,
+                        has_stripped_fields: _,
+                    } => {
+                        let mut field_docs = Vec::new();
+                        for field_id in fields {
+                            if let Some(field_item) = krate.index.get(field_id) {
+                                if let ItemEnum::StructField(ty) = &field_item.inner {
+                                    let field_name =
+                                        field_item.name.as_deref().unwrap_or("_").to_string();
+                                    field_docs.push(FieldDoc {
+                                        name: field_name,
+                                        type_str: render_type(ty),
+                                        docs: field_item.docs.clone(),
+                                        is_public: true,
+                                    });
+                                }
+                            }
+                        }
+                        VariantKind::Struct(field_docs)
+                    }
+                };
+                variants.push(VariantDoc {
+                    name: variant_name,
+                    docs: variant_item.docs.clone(),
+                    kind,
+                });
+            }
         }
     }
 
-    methods.sort_by(|a, b| a.name.cmp(&b.name));
-    methods
+    variants
 }
 
-/// Check if an impl block is for a specific type (matched by Id).
-fn impl_is_for_type(krate: &Crate, impl_: &rustdoc_types::Impl, type_id: &Id) -> bool {
-    // The impl's `for_` field is a Type. For resolved paths, we can check the id.
-    if let Type::ResolvedPath(path) = &impl_.for_ {
-        return path.id == *type_id;
+fn collect_impl_doc(
+    krate: &Crate,
+    item: &Item,
+    impl_: &rustdoc_types::Impl,
+    mode: ConvertMode,
+) -> Option<ImplDoc> {
+    if item.span.is_none() || impl_.is_synthetic || !should_include_impl(krate, impl_, mode) {
+        return None;
     }
-    // Fallback: check if this impl's parent path matches
-    // For MVP, the ResolvedPath check covers the common case
-    let _ = krate; // suppress unused warning
-    false
+
+    let mut methods = Vec::new();
+    for method_id in &impl_.items {
+        let Some(method_item) = krate.index.get(method_id) else {
+            continue;
+        };
+        let ItemEnum::Function(function) = &method_item.inner else {
+            continue;
+        };
+
+        let include_method = if mode.include_private_members() || impl_.trait_.is_some() {
+            true
+        } else {
+            should_include_member_item(method_item, false)
+        };
+        if !include_method {
+            continue;
+        }
+
+        let method_name = method_item.name.as_deref().unwrap_or("_");
+        methods.push(MethodDoc {
+            name: method_name.to_string(),
+            docs: method_item.docs.clone(),
+            signature: render_function_sig(method_name, function, &method_item.visibility),
+        });
+    }
+    methods.sort_by(|a, b| a.name.cmp(&b.name));
+
+    if !mode.include_private_items() && impl_.trait_.is_none() && methods.is_empty() {
+        return None;
+    }
+
+    Some(ImplDoc {
+        header: render_impl_header(impl_),
+        docs: item.docs.clone(),
+        methods,
+        target_name: render_type(&impl_.for_),
+    })
+}
+
+fn should_include_impl(krate: &Crate, impl_: &rustdoc_types::Impl, mode: ConvertMode) -> bool {
+    if mode.include_private_items() {
+        return true;
+    }
+
+    let target_visible = match &impl_.for_ {
+        Type::ResolvedPath(path) => item_is_public(krate, &path.id),
+        _ => true,
+    };
+    if !target_visible {
+        return false;
+    }
+
+    match &impl_.trait_ {
+        Some(path) => krate
+            .index
+            .get(&path.id)
+            .map(|item| is_public_visibility(&item.visibility))
+            .unwrap_or(true),
+        None => true,
+    }
+}
+
+fn item_is_public(krate: &Crate, id: &Id) -> bool {
+    krate.index
+        .get(id)
+        .map(|item| is_public_visibility(&item.visibility))
+        .unwrap_or(true)
+}
+
+fn collect_assoc_impl_docs(krate: &Crate, impl_ids: &[Id], mode: ConvertMode) -> Vec<ImplDoc> {
+    impl_ids
+        .iter()
+        .filter_map(|impl_id| krate.index.get(impl_id))
+        .filter_map(|item| match &item.inner {
+            ItemEnum::Impl(impl_) => collect_impl_doc(krate, item, impl_, mode),
+            _ => None,
+        })
+        .collect()
 }
 
 /// Collect methods defined in a trait.
-fn collect_trait_methods(krate: &Crate, trait_: &rustdoc_types::Trait) -> Vec<MethodDoc> {
+fn collect_trait_methods(
+    krate: &Crate,
+    trait_: &rustdoc_types::Trait,
+    show_members: bool,
+) -> Vec<MethodDoc> {
+    if !show_members {
+        return Vec::new();
+    }
+
     let mut methods = Vec::new();
 
     for method_id in &trait_.items {
@@ -328,7 +597,7 @@ fn collect_trait_methods(krate: &Crate, trait_: &rustdoc_types::Trait) -> Vec<Me
                 methods.push(MethodDoc {
                     name: method_name.to_string(),
                     docs: method_item.docs.clone(),
-                    signature: render_function_sig(method_name, f),
+                    signature: render_function_sig(method_name, f, &method_item.visibility),
                 });
             }
         }
@@ -341,12 +610,16 @@ fn collect_trait_methods(krate: &Crate, trait_: &rustdoc_types::Trait) -> Vec<Me
 // Signature rendering
 // ---------------------------------------------------------------------------
 
-fn render_function_sig(name: &str, func: &rustdoc_types::Function) -> String {
+fn render_function_sig(
+    name: &str,
+    func: &rustdoc_types::Function,
+    visibility: &Visibility,
+) -> String {
     let generics_str = render_generics(&func.generics);
     let params = render_fn_params(&func.sig);
     let ret = render_fn_return(&func.sig);
     let where_clause = render_where_clause(&func.generics);
-    let header = render_fn_header(&func.header);
+    let header = render_fn_header(&func.header, visibility);
 
     let mut sig = format!("{header}fn {name}{generics_str}({params}){ret}");
     if !where_clause.is_empty() {
@@ -355,29 +628,34 @@ fn render_function_sig(name: &str, func: &rustdoc_types::Function) -> String {
     sig
 }
 
-fn render_fn_header(header: &rustdoc_types::FunctionHeader) -> String {
-    let mut parts = Vec::new();
+fn render_visibility_prefix(visibility: &Visibility) -> String {
+    match visibility {
+        Visibility::Public => "pub ".to_string(),
+        Visibility::Default => String::new(),
+        Visibility::Crate => "pub(crate) ".to_string(),
+        Visibility::Restricted { path, .. } => format!("pub(in {path}) "),
+    }
+}
+
+fn render_fn_header(header: &rustdoc_types::FunctionHeader, visibility: &Visibility) -> String {
+    let mut sig = render_visibility_prefix(visibility);
     if header.is_unsafe {
-        parts.push("unsafe ");
+        sig.push_str("unsafe ");
     }
     if header.is_const {
-        parts.push("const ");
+        sig.push_str("const ");
     }
     if header.is_async {
-        parts.push("async ");
+        sig.push_str("async ");
     }
-    // We always show pub for simplicity in docs
-    parts.insert(0, "pub ");
-    parts.join("")
+    sig
 }
 
 fn render_fn_params(sig: &rustdoc_types::FunctionSignature) -> String {
     sig.inputs
         .iter()
         .map(|(name, ty)| {
-            let type_str = render_type(ty);
             if name == "self" {
-                // self parameters: render as-is from the type
                 match ty {
                     Type::BorrowedRef {
                         lifetime,
@@ -397,7 +675,7 @@ fn render_fn_params(sig: &rustdoc_types::FunctionSignature) -> String {
                     _ => "self".to_string(),
                 }
             } else {
-                format!("{name}: {type_str}")
+                format!("{name}: {}", render_type(ty))
             }
         })
         .collect::<Vec<_>>()
@@ -406,99 +684,109 @@ fn render_fn_params(sig: &rustdoc_types::FunctionSignature) -> String {
 
 fn render_fn_return(sig: &rustdoc_types::FunctionSignature) -> String {
     match &sig.output {
-        Some(ty) => {
-            let type_str = render_type(ty);
-            format!(" -> {type_str}")
-        }
+        Some(ty) => format!(" -> {}", render_type(ty)),
         None => String::new(),
     }
 }
 
-fn render_struct_sig(name: &str, s: &rustdoc_types::Struct, _item: &Item) -> String {
+fn render_struct_sig(
+    name: &str,
+    s: &rustdoc_types::Struct,
+    fields: &[FieldDoc],
+    visibility: &Visibility,
+) -> String {
     let generics_str = render_generics(&s.generics);
     let where_clause = render_where_clause(&s.generics);
+    let visibility = render_visibility_prefix(visibility);
 
-    let fields = match &s.kind {
+    match &s.kind {
         rustdoc_types::StructKind::Unit => {
-            let mut sig = format!("pub struct {name}{generics_str}");
+            let mut sig = format!("{visibility}struct {name}{generics_str}");
             if !where_clause.is_empty() {
                 sig.push_str(&format!("\nwhere\n{where_clause}"));
             }
             sig.push(';');
-            return sig;
+            sig
         }
-        rustdoc_types::StructKind::Tuple(fields) => {
-            let field_strs: Vec<String> = fields
+        rustdoc_types::StructKind::Tuple(tuple_fields) => {
+            let mut field_strs: Vec<String> = fields
                 .iter()
-                .map(|f| {
-                    f.as_ref()
-                        .map(|_| "_".to_string())
-                        .unwrap_or_else(|| "_".to_string())
+                .map(|field| {
+                    let vis = if field.is_public { "pub " } else { "" };
+                    format!("{vis}{}", field.type_str)
                 })
                 .collect();
-            let mut sig = format!("pub struct {name}{generics_str}({})", field_strs.join(", "));
+
+            if tuple_fields.len() > fields.len() {
+                field_strs.push("/* private fields omitted */".to_string());
+            }
+
+            let mut sig = format!(
+                "{visibility}struct {name}{generics_str}({})",
+                field_strs.join(", ")
+            );
             if !where_clause.is_empty() {
                 sig.push_str(&format!("\nwhere\n{where_clause}"));
             }
             sig.push(';');
-            return sig;
+            sig
         }
         rustdoc_types::StructKind::Plain {
-            fields,
+            fields: plain_fields,
             has_stripped_fields,
-        } => (fields, *has_stripped_fields),
-    };
+        } => {
+            let mut sig = format!("{visibility}struct {name}{generics_str}");
+            if !where_clause.is_empty() {
+                sig.push_str(&format!("\nwhere\n{where_clause}"));
+            }
+            sig.push_str(" {\n");
 
-    let (field_ids, has_stripped) = fields;
-    let mut sig = format!("pub struct {name}{generics_str}");
-    if !where_clause.is_empty() {
-        sig.push_str(&format!("\nwhere\n{where_clause}"));
+            for field in fields {
+                let vis = if field.is_public { "pub " } else { "" };
+                sig.push_str(&format!("    {vis}{}: {},\n", field.name, field.type_str));
+            }
+
+            let has_hidden_fields = plain_fields.len() > fields.len();
+
+            if *has_stripped_fields || has_hidden_fields {
+                sig.push_str("    // some fields omitted\n");
+            }
+
+            sig.push('}');
+            sig
+        }
     }
-    sig.push_str(" {\n");
-
-    for _field_id in field_ids {
-        // For MVP, we don't resolve field types from the index
-        // since that requires looking up each field Id
-        sig.push_str("    // ...\n");
-        break; // Just indicate there are fields
-    }
-
-    if has_stripped {
-        sig.push_str("    // some fields omitted\n");
-    }
-
-    sig.push('}');
-    sig
 }
 
-fn render_enum_sig(krate: &Crate, name: &str, e: &rustdoc_types::Enum, _item: &Item) -> String {
+fn render_enum_sig(
+    name: &str,
+    e: &rustdoc_types::Enum,
+    variants: &[VariantDoc],
+    visibility: &Visibility,
+) -> String {
     let generics_str = render_generics(&e.generics);
     let where_clause = render_where_clause(&e.generics);
 
-    let mut sig = format!("pub enum {name}{generics_str}");
+    let mut sig = format!("{}enum {name}{generics_str}", render_visibility_prefix(visibility));
     if !where_clause.is_empty() {
         sig.push_str(&format!("\nwhere\n{where_clause}"));
     }
     sig.push_str(" {\n");
 
-    for variant_id in &e.variants {
-        if let Some(variant_item) = krate.index.get(variant_id) {
-            let variant_name = variant_item.name.as_deref().unwrap_or("_");
-            match &variant_item.inner {
-                ItemEnum::Variant(v) => match &v.kind {
-                    rustdoc_types::VariantKind::Plain => {
-                        sig.push_str(&format!("    {variant_name},\n"));
-                    }
-                    rustdoc_types::VariantKind::Tuple(_) => {
-                        sig.push_str(&format!("    {variant_name}(/* ... */),\n"));
-                    }
-                    rustdoc_types::VariantKind::Struct { .. } => {
-                        sig.push_str(&format!("    {variant_name} {{ /* ... */ }},\n"));
-                    }
-                },
-                _ => {
-                    sig.push_str(&format!("    {variant_name},\n"));
+    for variant in variants {
+        match &variant.kind {
+            VariantKind::Plain => {
+                sig.push_str(&format!("    {},\n", variant.name));
+            }
+            VariantKind::Tuple(types) => {
+                sig.push_str(&format!("    {}({}),\n", variant.name, types.join(", ")));
+            }
+            VariantKind::Struct(fields) => {
+                sig.push_str(&format!("    {} {{\n", variant.name));
+                for field in fields {
+                    sig.push_str(&format!("        {}: {},\n", field.name, field.type_str));
                 }
+                sig.push_str("    },\n");
             }
         }
     }
@@ -507,7 +795,12 @@ fn render_enum_sig(krate: &Crate, name: &str, e: &rustdoc_types::Enum, _item: &I
     sig
 }
 
-fn render_trait_sig(name: &str, t: &rustdoc_types::Trait, _item: &Item) -> String {
+fn render_trait_sig(
+    name: &str,
+    t: &rustdoc_types::Trait,
+    methods: &[MethodDoc],
+    visibility: &Visibility,
+) -> String {
     let generics_str = render_generics(&t.generics);
     let where_clause = render_where_clause(&t.generics);
 
@@ -518,12 +811,113 @@ fn render_trait_sig(name: &str, t: &rustdoc_types::Trait, _item: &Item) -> Strin
         format!(": {}", bound_strs.join(" + "))
     };
 
-    let mut sig = format!("pub trait {name}{generics_str}{bounds}");
+    let mut sig = format!(
+        "{}trait {name}{generics_str}{bounds}",
+        render_visibility_prefix(visibility)
+    );
     if !where_clause.is_empty() {
         sig.push_str(&format!("\nwhere\n{where_clause}"));
     }
-    sig.push_str(" {\n    // ...\n}");
+    sig.push_str(" {\n");
+    if methods.is_empty() {
+        sig.push_str("    // ...\n");
+    } else {
+        for method in methods {
+            for line in render_trait_method_sig(&method.signature).lines() {
+                sig.push_str("    ");
+                sig.push_str(line);
+                sig.push('\n');
+            }
+        }
+    }
+    sig.push('}');
     sig
+}
+
+fn render_trait_method_sig(signature: &str) -> String {
+    let mut sig = strip_visibility_prefix(signature.trim()).to_string();
+    if !sig.ends_with(';') {
+        sig.push(';');
+    }
+    sig
+}
+
+fn strip_visibility_prefix(signature: &str) -> &str {
+    let signature = signature.strip_prefix("pub ").unwrap_or(signature);
+    let signature = signature.strip_prefix("pub(crate) ").unwrap_or(signature);
+    if let Some(rest) = signature.strip_prefix("pub(in ") {
+        if let Some(idx) = rest.find(") ") {
+            &rest[idx + 2..]
+        } else {
+            signature
+        }
+    } else {
+        signature
+    }
+}
+
+fn render_impl_header(impl_: &rustdoc_types::Impl) -> String {
+    let generics = render_generics(&impl_.generics);
+    let where_clause = render_where_clause(&impl_.generics);
+    let unsafe_prefix = if impl_.is_unsafe { "unsafe " } else { "" };
+    let negative = if impl_.is_negative { "!" } else { "" };
+    let target = render_type(&impl_.for_);
+
+    let mut header = match &impl_.trait_ {
+        Some(trait_path) => format!(
+            "{unsafe_prefix}impl{generics} {negative}{} for {target}",
+            render_type(&Type::ResolvedPath(trait_path.clone()))
+        ),
+        None => format!("{unsafe_prefix}impl{generics} {target}"),
+    };
+
+    if !where_clause.is_empty() {
+        header.push_str(&format!("\nwhere\n{where_clause}"));
+    }
+
+    header
+}
+
+fn render_type_alias_sig(name: &str, ta: &rustdoc_types::TypeAlias, visibility: &Visibility) -> String {
+    let generics_str = render_generics(&ta.generics);
+    let where_clause = render_where_clause(&ta.generics);
+    let type_str = render_type(&ta.type_);
+    let mut sig = format!(
+        "{}type {name}{generics_str} = {type_str}",
+        render_visibility_prefix(visibility)
+    );
+    if !where_clause.is_empty() {
+        sig.push_str(&format!("\nwhere\n{where_clause}"));
+    }
+    sig.push(';');
+    sig
+}
+
+fn render_constant_sig(
+    name: &str,
+    type_: &Type,
+    const_: &rustdoc_types::Constant,
+    visibility: &Visibility,
+) -> String {
+    let type_str = render_type(type_);
+    let value = const_
+        .value
+        .as_deref()
+        .map(|v| format!(" = {v}"))
+        .unwrap_or_default();
+    format!(
+        "{}const {name}: {type_str}{value};",
+        render_visibility_prefix(visibility)
+    )
+}
+
+fn render_static_sig(name: &str, s: &rustdoc_types::Static, visibility: &Visibility) -> String {
+    let type_str = render_type(&s.type_);
+    let mutability = if s.is_mutable { "mut " } else { "" };
+    format!(
+        "{}static {mutability}{name}: {type_str};",
+        render_visibility_prefix(visibility)
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -533,7 +927,9 @@ fn render_trait_sig(name: &str, t: &rustdoc_types::Trait, _item: &Item) -> Strin
 pub fn render_type(ty: &Type) -> String {
     match ty {
         Type::ResolvedPath(path) => {
-            let mut result = path.path.clone();
+            // Use only the last segment of the path for cleaner output
+            let short = short_type_path(&path.path);
+            let mut result = short;
             if let Some(args) = &path.args {
                 result.push_str(&render_generic_args(args));
             }
@@ -636,6 +1032,18 @@ pub fn render_type(ty: &Type) -> String {
     }
 }
 
+/// Shorten a fully qualified type path to its last meaningful segment.
+/// e.g., "std::string::String" -> "String", "crate::model::StructDoc" -> "StructDoc"
+/// but preserve paths like "Vec" as-is.
+fn short_type_path(path: &str) -> String {
+    // If the path contains :: separators, take the last segment
+    if let Some(last) = path.rsplit("::").next() {
+        last.to_string()
+    } else {
+        path.to_string()
+    }
+}
+
 fn render_generic_args(args: &GenericArgs) -> String {
     match args {
         GenericArgs::AngleBracketed { args, constraints } => {
@@ -708,7 +1116,6 @@ fn render_generic_param(param: &GenericParamDef) -> String {
             is_synthetic,
         } => {
             if *is_synthetic {
-                // Synthetic params (from `impl Trait` in arg position) - skip for cleaner output
                 return param.name.clone();
             }
             let mut s = param.name.clone();
@@ -879,5 +1286,40 @@ mod tests {
     #[test]
     fn test_render_infer() {
         assert_eq!(render_type(&Type::Infer), "_");
+    }
+
+    #[test]
+    fn test_short_type_path() {
+        assert_eq!(short_type_path("std::string::String"), "String");
+        assert_eq!(short_type_path("crate::model::StructDoc"), "StructDoc");
+        assert_eq!(short_type_path("Vec"), "Vec");
+        assert_eq!(short_type_path("u32"), "u32");
+    }
+
+    #[test]
+    fn test_should_include_visibility_without_private_items() {
+        assert!(should_include_visibility(&Visibility::Public, false));
+        assert!(!should_include_visibility(&Visibility::Default, false));
+        assert!(!should_include_visibility(&Visibility::Crate, false));
+    }
+
+    #[test]
+    fn test_should_include_visibility_with_private_items() {
+        assert!(should_include_visibility(&Visibility::Default, true));
+        assert!(should_include_visibility(&Visibility::Crate, true));
+    }
+
+    #[test]
+    fn test_render_visibility_prefix() {
+        assert_eq!(render_visibility_prefix(&Visibility::Public), "pub ");
+        assert_eq!(render_visibility_prefix(&Visibility::Default), "");
+        assert_eq!(render_visibility_prefix(&Visibility::Crate), "pub(crate) ");
+        assert_eq!(
+            render_visibility_prefix(&Visibility::Restricted {
+                parent: Id(0),
+                path: "crate::internal".to_string(),
+            }),
+            "pub(in crate::internal) "
+        );
     }
 }

@@ -1,13 +1,19 @@
 /// File naming and link generation for Markdown output.
 
-/// Generate the file name for a documentation page.
+/// Generate the file name for a module page.
 ///
 /// Examples:
-/// - `item_file_name("struct", "mycrate::foo::Bar")` -> `"struct.mycrate.foo.Bar.md"`
-/// - `item_file_name("module", "mycrate::utils")` -> `"module.mycrate.utils.md"`
-pub fn item_file_name(kind: &str, qualified_name: &str) -> String {
+/// - `module_file_name("mycrate::utils")` -> `"module.mycrate.utils.md"`
+/// - `module_file_name("mycrate::foo::bar")` -> `"module.mycrate.foo.bar.md"`
+pub fn module_file_name(qualified_name: &str) -> String {
     let dotted = qualified_name.replace("::", ".");
-    format!("{kind}.{dotted}.md")
+    format!("module.{dotted}.md")
+}
+
+/// Generate the file name for an internal module page.
+pub fn internal_module_file_name(qualified_name: &str) -> String {
+    let dotted = qualified_name.replace("::", ".");
+    format!("module.{dotted}.internal.md")
 }
 
 /// The crate root page file name.
@@ -15,10 +21,9 @@ pub fn crate_index_file() -> &'static str {
     "index.md"
 }
 
-/// Generate a relative link from a listing page to an item page.
-/// Since all pages are in the same flat directory, this is just the file name.
-pub fn relative_link(kind: &str, qualified_name: &str) -> String {
-    item_file_name(kind, qualified_name)
+/// The internal crate index page file name.
+pub fn internal_crate_index_file() -> &'static str {
+    "index.internal.md"
 }
 
 /// Extract the first sentence from documentation text, for use as a synopsis
@@ -61,26 +66,26 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_item_file_name_struct() {
+    fn test_module_file_name() {
         assert_eq!(
-            item_file_name("struct", "mycrate::foo::Bar"),
-            "struct.mycrate.foo.Bar.md"
-        );
-    }
-
-    #[test]
-    fn test_item_file_name_module() {
-        assert_eq!(
-            item_file_name("module", "mycrate::utils"),
+            module_file_name("mycrate::utils"),
             "module.mycrate.utils.md"
         );
     }
 
     #[test]
-    fn test_item_file_name_function() {
+    fn test_module_file_name_nested() {
         assert_eq!(
-            item_file_name("function", "mycrate::run"),
-            "function.mycrate.run.md"
+            module_file_name("mycrate::foo::bar"),
+            "module.mycrate.foo.bar.md"
+        );
+    }
+
+    #[test]
+    fn test_internal_module_file_name() {
+        assert_eq!(
+            internal_module_file_name("mycrate::utils"),
+            "module.mycrate.utils.internal.md"
         );
     }
 
@@ -90,11 +95,8 @@ mod tests {
     }
 
     #[test]
-    fn test_relative_link() {
-        assert_eq!(
-            relative_link("struct", "mycrate::Foo"),
-            "struct.mycrate.Foo.md"
-        );
+    fn test_internal_crate_index() {
+        assert_eq!(internal_crate_index_file(), "index.internal.md");
     }
 
     #[test]
