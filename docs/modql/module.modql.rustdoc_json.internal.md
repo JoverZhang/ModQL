@@ -22,6 +22,8 @@ pub struct RustdocOptions {
 /// Run `cargo +<nightly> rustdoc` and return the deserialized `rustdoc_types::Crate`.
 pub fn generate_rustdoc_json(opts: &RustdocOptions) -> Result<Crate>;
 
+// -- private --
+
 /// Invoke `cargo +<nightly> rustdoc` with the appropriate flags.
 pub(in ::rustdoc_json) fn invoke_cargo_rustdoc(opts: &RustdocOptions) -> Result<()>;
 

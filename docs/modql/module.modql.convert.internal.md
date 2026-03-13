@@ -4,6 +4,8 @@
 
 ## Structs
 
+---
+
 ### `CollectPolicy`
 
 ```rust
@@ -27,6 +29,8 @@ pub enum ConvertMode {
 ```
 
 ## Traits
+
+---
 
 ### `ItemContainer`
 
@@ -206,6 +210,13 @@ impl ItemContainer for ModuleDoc {
 ## Functions
 
 ```rust
+/// Convert a rustdoc JSON `Crate` into our internal `CrateDoc` model.
+pub fn convert(krate: &Crate, mode: ConvertMode) -> Result<CrateDoc>;
+
+pub fn render_type(ty: &Type) -> String;
+
+// -- private --
+
 pub(in ::convert) fn collect_assoc_impl_docs(krate: &Crate, impl_ids: &[Id], mode: ConvertMode, policy: CollectPolicy) -> Vec<ImplDoc>;
 
 /// Collect enum variants with their fields resolved from the rustdoc index.
@@ -218,9 +229,6 @@ pub(in ::convert) fn collect_struct_fields(krate: &Crate, s: &Struct, show_membe
 
 /// Collect methods defined in a trait.
 pub(in ::convert) fn collect_trait_methods(krate: &Crate, trait_: &Trait, show_members: bool) -> Vec<MethodDoc>;
-
-/// Convert a rustdoc JSON `Crate` into our internal `CrateDoc` model.
-pub fn convert(krate: &Crate, mode: ConvertMode) -> Result<CrateDoc>;
 
 /// Dispatch an item into the appropriate collection on the container.
 pub(in ::convert) fn dispatch_item<C: ItemContainer>(krate: &Crate, item: &Item, parent_path: &str, container: &mut C, mode: ConvertMode, policy: CollectPolicy);
@@ -259,8 +267,6 @@ pub(in ::convert) fn render_trait_method_sig(signature: &str) -> String;
 
 pub(in ::convert) fn render_trait_sig(name: &str, t: &Trait, methods: &[MethodDoc], visibility: &Visibility) -> String;
 
-pub fn render_type(ty: &Type) -> String;
-
 pub(in ::convert) fn render_type_alias_sig(name: &str, ta: &TypeAlias, visibility: &Visibility) -> String;
 
 pub(in ::convert) fn render_visibility_prefix(visibility: &Visibility) -> String;
@@ -280,12 +286,12 @@ pub(in ::convert) fn should_include_member_item(item: &Item, include_private_mem
 
 pub(in ::convert) fn should_include_visibility(visibility: &Visibility, include_private_items: bool) -> bool;
 
-/// Sort all items alphabetically by name for stable output.
+/// Sort all items: public first, then private, alphabetically within each group.
 pub(in ::convert) fn sort_items(crate_doc: &mut CrateDoc);
 
 pub(in ::convert) fn sort_module_items(m: &mut ModuleDoc);
 
-pub(in ::convert) fn strip_visibility_prefix(signature: &str) -> &str;
+pub(crate) fn strip_visibility_prefix(signature: &str) -> &str;
 
 ```
 

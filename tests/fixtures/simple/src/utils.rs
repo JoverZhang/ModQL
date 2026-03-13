@@ -9,3 +9,9 @@ pub fn helper(value: &str) -> String {
 fn internal_helper(value: &str) -> String {
     format!("internal: {value}")
 }
+
+/// The utility version number.
+pub const UTIL_VERSION: u32 = 1;
+
+/// Internal utility limit.
+const UTIL_LIMIT: usize = 100;

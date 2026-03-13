@@ -4,6 +4,8 @@
 
 ## Enums
 
+---
+
 ### `TypeKind`
 
 ```rust
@@ -129,6 +131,11 @@ impl ViewKind {
 ## Functions
 
 ```rust
+/// Render all documentation pages to the output directory.
+pub fn render(surface_doc: &CrateDoc, internal_doc: &CrateDoc, out_dir: &Path) -> Result<()>;
+
+// -- private --
+
 pub(in ::render_md) fn collect_module_names(modules: &[ModuleDoc]) -> BTreeSet<String>;
 
 pub(in ::render_md) fn collect_module_names_into(modules: &[ModuleDoc], names: &mut BTreeSet<String>);
@@ -136,9 +143,6 @@ pub(in ::render_md) fn collect_module_names_into(modules: &[ModuleDoc], names: &
 pub(in ::render_md) fn ensure_decl_terminated(signature: &str) -> String;
 
 pub(in ::render_md) fn find_decl_delimiter(signature: &str) -> Option<usize>;
-
-/// Render all documentation pages to the output directory.
-pub fn render(surface_doc: &CrateDoc, internal_doc: &CrateDoc, out_dir: &Path) -> Result<()>;
 
 pub(in ::render_md) fn render_body_sections(out: &mut String, crate_doc: &CrateDoc, view: ViewKind);
 
@@ -174,7 +178,7 @@ pub(in ::render_md) fn render_module_sections(out: &mut String, module: &ModuleD
 
 pub(in ::render_md) fn render_signature_block_section<'a, I>(out: &mut String, title: &str, items: I, include_docs: bool)
 where
-    I: IntoIterator<Item = (Option<&'a str>, &'a str)>,;
+    I: IntoIterator<Item = (Option<&'a str>, &'a str, bool)>,;
 
 pub(in ::render_md) fn render_statics_section(out: &mut String, items: &[StaticDoc]);
 

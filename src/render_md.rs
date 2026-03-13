@@ -8,6 +8,7 @@ use std::fmt::Write as FmtWrite;
 use std::fs;
 use std::path::Path;
 
+use crate::convert::strip_visibility_prefix;
 use crate::model::{
     ConstantDoc, CrateDoc, EnumDoc, FieldDoc, FunctionDoc, ImplDoc, MethodDoc, ModuleDoc,
     StaticDoc, StructDoc, TraitDoc, TypeAliasDoc, VariantDoc,
@@ -315,7 +316,7 @@ fn render_surface_sections(
         "Functions",
         functions
             .iter()
-            .map(|function| (None, function.signature.as_str())),
+            .map(|function| (None, function.signature.as_str(), true)),
         false,
     );
     render_impl_headers_section(out, impls);
@@ -324,19 +325,23 @@ fn render_surface_sections(
         "Type Aliases",
         type_aliases
             .iter()
-            .map(|item| (None, item.signature.as_str())),
+            .map(|item| (None, item.signature.as_str(), true)),
         false,
     );
     render_signature_block_section(
         out,
         "Constants",
-        constants.iter().map(|item| (None, item.signature.as_str())),
+        constants
+            .iter()
+            .map(|item| (None, item.signature.as_str(), true)),
         false,
     );
     render_signature_block_section(
         out,
         "Statics",
-        statics.iter().map(|item| (None, item.signature.as_str())),
+        statics
+            .iter()
+            .map(|item| (None, item.signature.as_str(), true)),
         false,
     );
 }
@@ -418,7 +423,12 @@ fn render_structs_section(out: &mut String, structs: &[StructDoc]) {
     }
 
     let _ = writeln!(out, "## Structs\n");
+    let mut seen_private = false;
     for item in structs {
+        if !seen_private && !item.is_public {
+            seen_private = true;
+            let _ = writeln!(out, "---\n");
+        }
         let _ = writeln!(out, "### `{}`\n", naming::short_name(&item.qualified_name));
         if let Some(ref docs) = item.docs {
             render_docs_paragraph(out, docs);
@@ -434,7 +444,12 @@ fn render_enums_section(out: &mut String, enums: &[EnumDoc]) {
     }
 
     let _ = writeln!(out, "## Enums\n");
+    let mut seen_private = false;
     for item in enums {
+        if !seen_private && !item.is_public {
+            seen_private = true;
+            let _ = writeln!(out, "---\n");
+        }
         let _ = writeln!(out, "### `{}`\n", naming::short_name(&item.qualified_name));
         if let Some(ref docs) = item.docs {
             render_docs_paragraph(out, docs);
@@ -450,7 +465,12 @@ fn render_traits_section(out: &mut String, traits: &[TraitDoc]) {
     }
 
     let _ = writeln!(out, "## Traits\n");
+    let mut seen_private = false;
     for item in traits {
+        if !seen_private && !item.is_public {
+            seen_private = true;
+            let _ = writeln!(out, "---\n");
+        }
         let _ = writeln!(out, "### `{}`\n", naming::short_name(&item.qualified_name));
         if let Some(ref docs) = item.docs {
             render_docs_paragraph(out, docs);
@@ -484,9 +504,17 @@ fn render_functions_section(out: &mut String, functions: &[FunctionDoc]) {
         return;
     }
 
+    let has_pub = functions.iter().any(|f| f.is_public);
+    let has_private = functions.iter().any(|f| !f.is_public);
+
     let _ = writeln!(out, "## Functions\n");
     let _ = writeln!(out, "```rust");
+    let mut seen_private = false;
     for function in functions {
+        if !seen_private && !function.is_public && has_pub && has_private {
+            seen_private = true;
+            let _ = writeln!(out, "// -- private --\n");
+        }
         write_doc_comments(out, function.docs.as_deref(), "");
         let _ = writeln!(out, "{}", ensure_decl_terminated(&function.signature));
         out.push('\n');
@@ -499,9 +527,13 @@ fn render_type_aliases_section(out: &mut String, items: &[TypeAliasDoc]) {
     render_signature_block_section(
         out,
         "Type Aliases",
-        items
-            .iter()
-            .map(|item| (item.docs.as_deref(), item.signature.as_str())),
+        items.iter().map(|item| {
+            (
+                item.docs.as_deref(),
+                item.signature.as_str(),
+                item.is_public,
+            )
+        }),
         true,
     );
 }
@@ -510,9 +542,13 @@ fn render_constants_section(out: &mut String, items: &[ConstantDoc]) {
     render_signature_block_section(
         out,
         "Constants",
-        items
-            .iter()
-            .map(|item| (item.docs.as_deref(), item.signature.as_str())),
+        items.iter().map(|item| {
+            (
+                item.docs.as_deref(),
+                item.signature.as_str(),
+                item.is_public,
+            )
+        }),
         true,
     );
 }
@@ -521,9 +557,13 @@ fn render_statics_section(out: &mut String, items: &[StaticDoc]) {
     render_signature_block_section(
         out,
         "Statics",
-        items
-            .iter()
-            .map(|item| (item.docs.as_deref(), item.signature.as_str())),
+        items.iter().map(|item| {
+            (
+                item.docs.as_deref(),
+                item.signature.as_str(),
+                item.is_public,
+            )
+        }),
         true,
     );
 }
@@ -534,16 +574,24 @@ fn render_signature_block_section<'a, I>(
     items: I,
     include_docs: bool,
 ) where
-    I: IntoIterator<Item = (Option<&'a str>, &'a str)>,
+    I: IntoIterator<Item = (Option<&'a str>, &'a str, bool)>,
 {
     let items: Vec<_> = items.into_iter().collect();
     if items.is_empty() {
         return;
     }
 
+    let has_pub = items.iter().any(|(_, _, is_pub)| *is_pub);
+    let has_private = items.iter().any(|(_, _, is_pub)| !*is_pub);
+
     let _ = writeln!(out, "## {title}\n");
     let _ = writeln!(out, "```rust");
-    for (docs, signature) in items {
+    let mut seen_private = false;
+    for (docs, signature, is_public) in items {
+        if !seen_private && !is_public && has_pub && has_private && include_docs {
+            seen_private = true;
+            let _ = writeln!(out, "// -- private --\n");
+        }
         if include_docs {
             write_doc_comments(out, docs, "");
         }
@@ -569,7 +617,15 @@ enum TypeKind {
 fn summarize_type_signature(signature: &str, kind: TypeKind) -> String {
     let trimmed = signature.trim();
     let body_delim = match kind {
-        TypeKind::Struct => find_decl_delimiter(trimmed).unwrap_or(trimmed.len()),
+        TypeKind::Struct => {
+            // Skip the visibility prefix to avoid matching the parentheses
+            // in pub(crate) or pub(in ...) as struct body delimiters.
+            let without_vis = strip_visibility_prefix(trimmed);
+            let offset = trimmed.len() - without_vis.len();
+            find_decl_delimiter(without_vis)
+                .map(|d| d + offset)
+                .unwrap_or(trimmed.len())
+        }
         TypeKind::Enum | TypeKind::Trait => trimmed.find('{').unwrap_or(trimmed.len()),
     };
     let summary = trimmed[..body_delim].trim_end();
@@ -598,10 +654,18 @@ fn render_impl_block(impl_doc: &ImplDoc) -> String {
         return ensure_decl_terminated(&impl_doc.header);
     }
 
+    let has_pub = impl_doc.methods.iter().any(|m| m.is_public);
+    let has_private = impl_doc.methods.iter().any(|m| !m.is_public);
+
     let mut out = String::new();
     out.push_str(&impl_doc.header);
     out.push_str(" {\n");
+    let mut seen_private = false;
     for method in &impl_doc.methods {
+        if !seen_private && !method.is_public && has_pub && has_private {
+            seen_private = true;
+            out.push_str("    // -- private --\n\n");
+        }
         write_doc_comments(&mut out, method.docs.as_deref(), "    ");
         for line in ensure_decl_terminated(&method.signature).lines() {
             out.push_str("    ");
@@ -793,6 +857,7 @@ mod tests {
                 name: "new".to_string(),
                 docs: Some("Create a greeter.".to_string()),
                 signature: "pub fn new(name: &str) -> Self".to_string(),
+                is_public: true,
             }],
         };
         let block = render_impl_block(&impl_doc);
@@ -820,11 +885,13 @@ mod tests {
                 docs: Some("Field docs.".to_string()),
                 is_public: true,
             }],
+            is_public: true,
         });
         doc.functions.push(FunctionDoc {
             qualified_name: "mycrate::run".to_string(),
             docs: Some("Run docs.".to_string()),
             signature: "pub fn run() -> String".to_string(),
+            is_public: true,
         });
         doc.impls.push(ImplDoc {
             header: "impl Greeter".to_string(),
@@ -834,6 +901,7 @@ mod tests {
                 name: "new".to_string(),
                 docs: Some("Method docs.".to_string()),
                 signature: "pub fn new(name: &str) -> Self".to_string(),
+                is_public: true,
             }],
         });
 
@@ -860,6 +928,7 @@ mod tests {
                 docs: Some("Field docs.".to_string()),
                 is_public: true,
             }],
+            is_public: true,
         });
 
         let page = render_crate_page(&doc, ViewKind::Internal, &BTreeSet::new());

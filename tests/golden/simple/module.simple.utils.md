@@ -11,3 +11,10 @@ pub fn helper(value: &str) -> String;
 
 ```
 
+## Constants
+
+```rust
+pub const UTIL_VERSION: u32 = 1u32;
+
+```
+

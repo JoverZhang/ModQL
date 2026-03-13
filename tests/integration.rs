@@ -184,6 +184,68 @@ fn test_generate_simple_fixture_matches_golden() {
         "Surface view should omit per-item doc comments"
     );
 
+    // New item types in surface view
+    assert!(
+        index_content.contains("pub struct Marker;"),
+        "Surface view should summarize unit struct"
+    );
+    assert!(
+        index_content.contains("pub struct Wrapper;"),
+        "Surface view should summarize tuple struct"
+    );
+    assert!(
+        index_content.contains("pub struct Container<T: Clone>;"),
+        "Surface view should summarize generic struct"
+    );
+    assert!(
+        index_content.contains("pub(crate) struct Config;"),
+        "Surface view should summarize private struct with pub(crate) prefix"
+    );
+    assert!(
+        index_content.contains("pub enum Shape;"),
+        "Surface view should summarize enum with mixed variant kinds"
+    );
+    assert!(
+        index_content.contains("pub(crate) enum LogLevel;"),
+        "Surface view should summarize private enum"
+    );
+    assert!(
+        index_content.contains("pub(crate) trait Validate;"),
+        "Surface view should summarize private trait"
+    );
+    assert!(
+        index_content.contains("pub unsafe fn unsafe_op(ptr: *const u8) -> u8;"),
+        "Surface view should include unsafe functions"
+    );
+    assert!(
+        index_content.contains("pub const fn const_add(a: u32, b: u32) -> u32;"),
+        "Surface view should include const functions"
+    );
+    assert!(
+        index_content.contains("pub const MAX_RETRIES: u32 = 3u32;"),
+        "Surface view should include public constants"
+    );
+    assert!(
+        index_content.contains("pub(crate) const BUFFER_SIZE: usize"),
+        "Surface view should include private constants"
+    );
+    assert!(
+        index_content.contains("pub static VERSION: &str;"),
+        "Surface view should include public statics"
+    );
+    assert!(
+        index_content.contains("pub(crate) static mut INSTANCE_COUNT: u32;"),
+        "Surface view should include private mutable statics"
+    );
+    assert!(
+        index_content.contains("pub type Result<T> = Result<T, String>;"),
+        "Surface view should include public type aliases"
+    );
+    assert!(
+        index_content.contains("pub(crate) type OptStr = Option<String>;"),
+        "Surface view should include private type aliases"
+    );
+
     let module_content = read_file(&out_dir.join("module.simple.utils.md"));
     assert!(
         !module_content.contains("internal_helper"),
@@ -192,6 +254,14 @@ fn test_generate_simple_fixture_matches_golden() {
     assert!(
         !module_content.contains("/// A helper function that formats a value."),
         "Nested module surface should omit per-item doc comments"
+    );
+    assert!(
+        module_content.contains("pub const UTIL_VERSION: u32 = 1u32;"),
+        "Nested module surface should include public constants"
+    );
+    assert!(
+        !module_content.contains("UTIL_LIMIT"),
+        "Nested module surface should exclude private constants"
     );
 
     // Verify no old per-item files are generated
@@ -257,9 +327,132 @@ fn test_generate_simple_fixture_writes_internal_view_with_private_items() {
         "Internal view should include private root free functions"
     );
 
+    // New item types in internal view
+    assert!(
+        index_content.contains("pub struct Marker;"),
+        "Internal view should include unit struct"
+    );
+    assert!(
+        index_content.contains("pub struct Wrapper(pub String);"),
+        "Internal view should expand tuple struct fields"
+    );
+    assert!(
+        index_content.contains("pub struct Container<T: Clone>"),
+        "Internal view should include generic struct"
+    );
+    assert!(
+        index_content.contains("pub(crate) struct Config"),
+        "Internal view should include private struct"
+    );
+    assert!(
+        index_content.contains("debug: bool"),
+        "Internal view should show private struct fields"
+    );
+    assert!(
+        index_content.contains("pub enum Shape"),
+        "Internal view should include enum with mixed variants"
+    );
+    assert!(
+        index_content.contains("Circle(f64)"),
+        "Internal view should show tuple variant"
+    );
+    assert!(
+        index_content.contains("width: f64"),
+        "Internal view should show struct variant fields"
+    );
+    assert!(
+        index_content.contains("pub(crate) enum LogLevel"),
+        "Internal view should include private enum"
+    );
+    assert!(
+        index_content.contains("pub(crate) trait Validate"),
+        "Internal view should include private trait"
+    );
+    assert!(
+        index_content.contains("fn validate(&self) -> bool;"),
+        "Internal view should show private trait methods"
+    );
+    assert!(
+        index_content.contains("pub unsafe fn unsafe_op(ptr: *const u8) -> u8;"),
+        "Internal view should include unsafe functions"
+    );
+    assert!(
+        index_content.contains("pub const fn const_add(a: u32, b: u32) -> u32;"),
+        "Internal view should include const functions"
+    );
+    assert!(
+        index_content.contains("pub const MAX_RETRIES: u32 = 3u32;"),
+        "Internal view should include public constants"
+    );
+    assert!(
+        index_content.contains("pub(crate) const BUFFER_SIZE: usize"),
+        "Internal view should include private constants"
+    );
+    assert!(
+        index_content.contains("pub static VERSION: &str;"),
+        "Internal view should include public statics"
+    );
+    assert!(
+        index_content.contains("pub(crate) static mut INSTANCE_COUNT: u32;"),
+        "Internal view should include private mutable statics"
+    );
+    assert!(
+        index_content.contains("pub type Result<T> = Result<T, String>;"),
+        "Internal view should include public type aliases"
+    );
+    assert!(
+        index_content.contains("pub(crate) type OptStr = Option<String>;"),
+        "Internal view should include private type aliases"
+    );
+
+    // Separator assertions for internal view
+    assert!(
+        index_content.contains("// -- private --"),
+        "Internal view should have private separator in code blocks"
+    );
+    assert!(
+        index_content.contains("---\n"),
+        "Internal view should have horizontal rule separator between pub and private sections"
+    );
+
+    // Verify pub items appear before private items in impl blocks
+    let impl_greeter_pos = index_content
+        .find("pub fn greet(&self) -> String;")
+        .unwrap();
+    let private_separator_pos = index_content[impl_greeter_pos..]
+        .find("// -- private --")
+        .map(|p| p + impl_greeter_pos);
+    let display_name_pos = index_content
+        .find("pub(crate) fn display_name(&self) -> &str;")
+        .unwrap();
+    assert!(
+        private_separator_pos.is_some(),
+        "Internal impl block should have private separator"
+    );
+    assert!(
+        private_separator_pos.unwrap() < display_name_pos,
+        "Private separator should appear before private methods in impl block"
+    );
+
     let module_content = read_file(&out_dir.join("module.simple.utils.internal.md"));
     assert!(
         module_content.contains("fn internal_helper(value: &str) -> String"),
         "Internal view should include private module functions"
+    );
+    assert!(
+        module_content.contains("/// A helper function that formats a value."),
+        "Internal view should include doc comments"
+    );
+    assert!(
+        module_content.contains("// -- private --"),
+        "Internal module view should have private separator"
+    );
+    assert!(
+        module_content.contains("pub const UTIL_VERSION: u32 = 1u32;"),
+        "Internal module view should include public constants"
+    );
+    assert!(
+        module_content.contains("UTIL_LIMIT"),
+        "Internal module view should include private constants"
     );
 }

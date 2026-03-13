@@ -13,6 +13,7 @@ pub struct ConstantDoc {
     pub qualified_name: String,
     pub docs: Option<String>,
     pub signature: String,
+    pub is_public: bool,
 }
 ```
 
@@ -50,6 +51,7 @@ pub struct EnumDoc {
     pub docs: Option<String>,
     pub signature: String,
     pub variants: Vec<VariantDoc>,
+    pub is_public: bool,
 }
 ```
 
@@ -75,6 +77,7 @@ pub struct FunctionDoc {
     pub qualified_name: String,
     pub docs: Option<String>,
     pub signature: String,
+    pub is_public: bool,
 }
 ```
 
@@ -100,6 +103,7 @@ pub struct MethodDoc {
     pub name: String,
     pub docs: Option<String>,
     pub signature: String,
+    pub is_public: bool,
 }
 ```
 
@@ -132,6 +136,7 @@ pub struct StaticDoc {
     pub qualified_name: String,
     pub docs: Option<String>,
     pub signature: String,
+    pub is_public: bool,
 }
 ```
 
@@ -145,6 +150,7 @@ pub struct StructDoc {
     pub docs: Option<String>,
     pub signature: String,
     pub fields: Vec<FieldDoc>,
+    pub is_public: bool,
 }
 ```
 
@@ -158,6 +164,7 @@ pub struct TraitDoc {
     pub docs: Option<String>,
     pub signature: String,
     pub methods: Vec<MethodDoc>,
+    pub is_public: bool,
 }
 ```
 
@@ -170,6 +177,7 @@ pub struct TypeAliasDoc {
     pub qualified_name: String,
     pub docs: Option<String>,
     pub signature: String,
+    pub is_public: bool,
 }
 ```
 

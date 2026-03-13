@@ -70,6 +70,7 @@ pub struct StructDoc {
     pub docs: Option<String>,
     pub signature: String,
     pub fields: Vec<FieldDoc>,
+    pub is_public: bool,
 }
 
 /// An enum with its variants, inherent methods, and signature.
@@ -79,6 +80,7 @@ pub struct EnumDoc {
     pub docs: Option<String>,
     pub signature: String,
     pub variants: Vec<VariantDoc>,
+    pub is_public: bool,
 }
 
 /// A trait with its required and provided methods.
@@ -88,6 +90,7 @@ pub struct TraitDoc {
     pub docs: Option<String>,
     pub signature: String,
     pub methods: Vec<MethodDoc>,
+    pub is_public: bool,
 }
 
 /// A free function (not a method).
@@ -96,6 +99,7 @@ pub struct FunctionDoc {
     pub qualified_name: String,
     pub docs: Option<String>,
     pub signature: String,
+    pub is_public: bool,
 }
 
 /// A method belonging to a type or trait.
@@ -104,6 +108,7 @@ pub struct MethodDoc {
     pub name: String,
     pub docs: Option<String>,
     pub signature: String,
+    pub is_public: bool,
 }
 
 /// An impl block defined in a module.
@@ -121,6 +126,7 @@ pub struct TypeAliasDoc {
     pub qualified_name: String,
     pub docs: Option<String>,
     pub signature: String,
+    pub is_public: bool,
 }
 
 /// A constant with its type and value.
@@ -129,6 +135,7 @@ pub struct ConstantDoc {
     pub qualified_name: String,
     pub docs: Option<String>,
     pub signature: String,
+    pub is_public: bool,
 }
 
 /// A static variable with its type.
@@ -137,4 +144,5 @@ pub struct StaticDoc {
     pub qualified_name: String,
     pub docs: Option<String>,
     pub signature: String,
+    pub is_public: bool,
 }

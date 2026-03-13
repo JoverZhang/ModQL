@@ -97,7 +97,7 @@ pub fn convert(krate: &Crate, mode: ConvertMode) -> Result<CrateDoc> {
     Ok(crate_doc)
 }
 
-/// Sort all items alphabetically by name for stable output.
+/// Sort all items: public first, then private, alphabetically within each group.
 fn sort_items(crate_doc: &mut CrateDoc) {
     crate_doc
         .modules
@@ -108,27 +108,41 @@ fn sort_items(crate_doc: &mut CrateDoc) {
             .then_with(|| a.header.cmp(&b.header))
     });
     crate_doc.impls.dedup_by(|a, b| a.header == b.header);
-    crate_doc
-        .structs
-        .sort_by(|a, b| a.qualified_name.cmp(&b.qualified_name));
-    crate_doc
-        .enums
-        .sort_by(|a, b| a.qualified_name.cmp(&b.qualified_name));
-    crate_doc
-        .traits
-        .sort_by(|a, b| a.qualified_name.cmp(&b.qualified_name));
-    crate_doc
-        .functions
-        .sort_by(|a, b| a.qualified_name.cmp(&b.qualified_name));
-    crate_doc
-        .type_aliases
-        .sort_by(|a, b| a.qualified_name.cmp(&b.qualified_name));
-    crate_doc
-        .constants
-        .sort_by(|a, b| a.qualified_name.cmp(&b.qualified_name));
-    crate_doc
-        .statics
-        .sort_by(|a, b| a.qualified_name.cmp(&b.qualified_name));
+    crate_doc.structs.sort_by(|a, b| {
+        b.is_public
+            .cmp(&a.is_public)
+            .then_with(|| a.qualified_name.cmp(&b.qualified_name))
+    });
+    crate_doc.enums.sort_by(|a, b| {
+        b.is_public
+            .cmp(&a.is_public)
+            .then_with(|| a.qualified_name.cmp(&b.qualified_name))
+    });
+    crate_doc.traits.sort_by(|a, b| {
+        b.is_public
+            .cmp(&a.is_public)
+            .then_with(|| a.qualified_name.cmp(&b.qualified_name))
+    });
+    crate_doc.functions.sort_by(|a, b| {
+        b.is_public
+            .cmp(&a.is_public)
+            .then_with(|| a.qualified_name.cmp(&b.qualified_name))
+    });
+    crate_doc.type_aliases.sort_by(|a, b| {
+        b.is_public
+            .cmp(&a.is_public)
+            .then_with(|| a.qualified_name.cmp(&b.qualified_name))
+    });
+    crate_doc.constants.sort_by(|a, b| {
+        b.is_public
+            .cmp(&a.is_public)
+            .then_with(|| a.qualified_name.cmp(&b.qualified_name))
+    });
+    crate_doc.statics.sort_by(|a, b| {
+        b.is_public
+            .cmp(&a.is_public)
+            .then_with(|| a.qualified_name.cmp(&b.qualified_name))
+    });
 }
 
 /// Container trait for dispatching items into the right collection.
@@ -257,8 +271,8 @@ fn dispatch_item<C: ItemContainer>(
             container.modules_mut().push(module_doc);
         }
         ItemEnum::Struct(s) => {
-            let show_members =
-                policy.include_private_members || is_public_visibility(&item.visibility);
+            let is_pub = is_public_visibility(&item.visibility);
+            let show_members = policy.include_private_members || is_pub;
             let fields =
                 collect_struct_fields(krate, s, show_members, policy.include_private_members);
             let sig = render_struct_sig(name, s, &fields, &item.visibility);
@@ -270,9 +284,11 @@ fn dispatch_item<C: ItemContainer>(
                 docs: item.docs.clone(),
                 signature: sig,
                 fields,
+                is_public: is_pub,
             });
         }
         ItemEnum::Enum(e) => {
+            let is_pub = is_public_visibility(&item.visibility);
             let variants = collect_enum_variants(krate, e);
             let sig = render_enum_sig(name, e, &variants, &item.visibility);
             container
@@ -283,11 +299,12 @@ fn dispatch_item<C: ItemContainer>(
                 docs: item.docs.clone(),
                 signature: sig,
                 variants,
+                is_public: is_pub,
             });
         }
         ItemEnum::Trait(t) => {
-            let show_members =
-                policy.include_private_members || is_public_visibility(&item.visibility);
+            let is_pub = is_public_visibility(&item.visibility);
+            let show_members = policy.include_private_members || is_pub;
             let methods = collect_trait_methods(krate, t, show_members);
             let sig = render_trait_sig(name, t, &methods, &item.visibility);
             container.impls_mut().extend(collect_assoc_impl_docs(
@@ -301,38 +318,47 @@ fn dispatch_item<C: ItemContainer>(
                 docs: item.docs.clone(),
                 signature: sig,
                 methods,
+                is_public: is_pub,
             });
         }
         ItemEnum::Function(f) => {
+            let is_pub = is_public_visibility(&item.visibility);
             let sig = render_function_sig(name, f, &item.visibility);
             container.functions_mut().push(FunctionDoc {
                 qualified_name: qualified,
                 docs: item.docs.clone(),
                 signature: sig,
+                is_public: is_pub,
             });
         }
         ItemEnum::TypeAlias(ta) => {
+            let is_pub = is_public_visibility(&item.visibility);
             let sig = render_type_alias_sig(name, ta, &item.visibility);
             container.type_aliases_mut().push(TypeAliasDoc {
                 qualified_name: qualified,
                 docs: item.docs.clone(),
                 signature: sig,
+                is_public: is_pub,
             });
         }
         ItemEnum::Constant { type_, const_ } => {
+            let is_pub = is_public_visibility(&item.visibility);
             let sig = render_constant_sig(name, type_, const_, &item.visibility);
             container.constants_mut().push(ConstantDoc {
                 qualified_name: qualified,
                 docs: item.docs.clone(),
                 signature: sig,
+                is_public: is_pub,
             });
         }
         ItemEnum::Static(s) => {
+            let is_pub = is_public_visibility(&item.visibility);
             let sig = render_static_sig(name, s, &item.visibility);
             container.statics_mut().push(StaticDoc {
                 qualified_name: qualified,
                 docs: item.docs.clone(),
                 signature: sig,
+                is_public: is_pub,
             });
         }
         ItemEnum::Impl(impl_) => {
@@ -355,20 +381,41 @@ fn sort_module_items(m: &mut ModuleDoc) {
             .then_with(|| a.header.cmp(&b.header))
     });
     m.impls.dedup_by(|a, b| a.header == b.header);
-    m.structs
-        .sort_by(|a, b| a.qualified_name.cmp(&b.qualified_name));
-    m.enums
-        .sort_by(|a, b| a.qualified_name.cmp(&b.qualified_name));
-    m.traits
-        .sort_by(|a, b| a.qualified_name.cmp(&b.qualified_name));
-    m.functions
-        .sort_by(|a, b| a.qualified_name.cmp(&b.qualified_name));
-    m.type_aliases
-        .sort_by(|a, b| a.qualified_name.cmp(&b.qualified_name));
-    m.constants
-        .sort_by(|a, b| a.qualified_name.cmp(&b.qualified_name));
-    m.statics
-        .sort_by(|a, b| a.qualified_name.cmp(&b.qualified_name));
+    m.structs.sort_by(|a, b| {
+        b.is_public
+            .cmp(&a.is_public)
+            .then_with(|| a.qualified_name.cmp(&b.qualified_name))
+    });
+    m.enums.sort_by(|a, b| {
+        b.is_public
+            .cmp(&a.is_public)
+            .then_with(|| a.qualified_name.cmp(&b.qualified_name))
+    });
+    m.traits.sort_by(|a, b| {
+        b.is_public
+            .cmp(&a.is_public)
+            .then_with(|| a.qualified_name.cmp(&b.qualified_name))
+    });
+    m.functions.sort_by(|a, b| {
+        b.is_public
+            .cmp(&a.is_public)
+            .then_with(|| a.qualified_name.cmp(&b.qualified_name))
+    });
+    m.type_aliases.sort_by(|a, b| {
+        b.is_public
+            .cmp(&a.is_public)
+            .then_with(|| a.qualified_name.cmp(&b.qualified_name))
+    });
+    m.constants.sort_by(|a, b| {
+        b.is_public
+            .cmp(&a.is_public)
+            .then_with(|| a.qualified_name.cmp(&b.qualified_name))
+    });
+    m.statics.sort_by(|a, b| {
+        b.is_public
+            .cmp(&a.is_public)
+            .then_with(|| a.qualified_name.cmp(&b.qualified_name))
+    });
 }
 
 fn should_include_item(item: &Item, include_private_items: bool) -> bool {
@@ -553,9 +600,14 @@ fn collect_impl_doc(
             name: method_name.to_string(),
             docs: method_item.docs.clone(),
             signature: render_function_sig(method_name, function, &method_item.visibility),
+            is_public: is_public_visibility(&method_item.visibility),
         });
     }
-    methods.sort_by(|a, b| a.name.cmp(&b.name));
+    methods.sort_by(|a, b| {
+        b.is_public
+            .cmp(&a.is_public)
+            .then_with(|| a.name.cmp(&b.name))
+    });
 
     if !mode.include_private_items() && impl_.trait_.is_none() && methods.is_empty() {
         return None;
@@ -641,6 +693,7 @@ fn collect_trait_methods(
                     name: method_name.to_string(),
                     docs: method_item.docs.clone(),
                     signature: render_function_sig(method_name, f, &method_item.visibility),
+                    is_public: is_public_visibility(&method_item.visibility),
                 });
             }
         }
@@ -888,7 +941,7 @@ fn render_trait_method_sig(signature: &str) -> String {
     sig
 }
 
-fn strip_visibility_prefix(signature: &str) -> &str {
+pub(crate) fn strip_visibility_prefix(signature: &str) -> &str {
     let signature = signature.strip_prefix("pub ").unwrap_or(signature);
     let signature = signature.strip_prefix("pub(crate) ").unwrap_or(signature);
     if let Some(rest) = signature.strip_prefix("pub(in ") {
