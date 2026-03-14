@@ -60,22 +60,6 @@ A tuple struct wrapping a value.
 pub struct Wrapper(pub String);
 ```
 
----
-
-### `Config`
-
-An internal-only configuration holder.
-
-```rust
-pub(crate) struct Config {
-    debug: bool,
-}
-```
-
-#### Fields
-
-- `debug`: Enable debug output.
-
 ## Enums
 
 ### `Format`
@@ -115,7 +99,222 @@ pub enum Shape {
 - `Rectangle`: A rectangle defined by width and height.
 - `Point`: A point with no data.
 
+## Traits
+
+### `Render`
+
+A trait for types that can render themselves.
+
+```rust
+pub trait Render {
+    fn render(&self) -> String;
+}
+```
+
+#### Methods
+
+- `render`: Render the value to a string.
+
+## Impl Blocks
+
+### `impl Greeter`
+
+```rust
+impl Greeter {
+    /// Generate a greeting message.
+    pub fn greet(&self) -> String;
+
+    /// Create a new `Greeter` with the given name.
+    pub fn new(name: &str) -> Self;
+
+}
+```
+
+// Trait implementations
+
+### `impl Render for Greeter`
+
+```rust
+impl Render for Greeter {
+    /// Render the current greeting.
+    fn render(&self) -> String;
+
+}
+```
+
+// Marker trait implementations
+
+### `impl<T> Send for Container<T>`
+
+```rust
+impl<T> Send for Container<T>
+where
+    T: Send,;
+```
+
+### `impl<T> Sync for Container<T>`
+
+```rust
+impl<T> Sync for Container<T>
+where
+    T: Sync,;
+```
+
+### `impl<T> Unpin for Container<T>`
+
+```rust
+impl<T> Unpin for Container<T>
+where
+    T: Unpin,;
+```
+
+### `impl Send for Format`
+
+```rust
+impl Send for Format;
+```
+
+### `impl Sync for Format`
+
+```rust
+impl Sync for Format;
+```
+
+### `impl Unpin for Format`
+
+```rust
+impl Unpin for Format;
+```
+
+### `impl Send for Greeter`
+
+```rust
+impl Send for Greeter;
+```
+
+### `impl Sync for Greeter`
+
+```rust
+impl Sync for Greeter;
+```
+
+### `impl Unpin for Greeter`
+
+```rust
+impl Unpin for Greeter;
+```
+
+### `impl Send for Marker`
+
+```rust
+impl Send for Marker;
+```
+
+### `impl Sync for Marker`
+
+```rust
+impl Sync for Marker;
+```
+
+### `impl Unpin for Marker`
+
+```rust
+impl Unpin for Marker;
+```
+
+### `impl Send for Shape`
+
+```rust
+impl Send for Shape;
+```
+
+### `impl Sync for Shape`
+
+```rust
+impl Sync for Shape;
+```
+
+### `impl Unpin for Shape`
+
+```rust
+impl Unpin for Shape;
+```
+
+### `impl Send for Wrapper`
+
+```rust
+impl Send for Wrapper;
+```
+
+### `impl Sync for Wrapper`
+
+```rust
+impl Sync for Wrapper;
+```
+
+### `impl Unpin for Wrapper`
+
+```rust
+impl Unpin for Wrapper;
+```
+
+## Functions
+
+```rust
+/// Compute a value at compile time.
+pub const fn const_add(a: u32, b: u32) -> u32;
+
+/// Run the application and return a status message.
+pub fn run() -> String;
+
+/// Perform an unsafe low-level operation.
+pub unsafe fn unsafe_op(ptr: *const u8) -> u8;
+
+```
+
+## Type Aliases
+
+```rust
+/// A public type alias for results.
+pub type Result<T> = Result<T, String>;
+
+```
+
+## Constants
+
+```rust
+/// The maximum number of retries.
+pub const MAX_RETRIES: u32 = 3u32;
+
+```
+
+## Statics
+
+```rust
+/// The application version string.
+pub static VERSION: &str;
+
+```
+
 ---
+
+## Structs (private)
+
+### `Config`
+
+An internal-only configuration holder.
+
+```rust
+pub(crate) struct Config {
+    debug: bool,
+}
+```
+
+#### Fields
+
+- `debug`: Enable debug output.
+
+## Enums (private)
 
 ### `LogLevel`
 
@@ -135,23 +334,7 @@ pub(crate) enum LogLevel {
 - `Warn`: Warning messages.
 - `Error`: Error messages.
 
-## Traits
-
-### `Render`
-
-A trait for types that can render themselves.
-
-```rust
-pub trait Render {
-    fn render(&self) -> String;
-}
-```
-
-#### Methods
-
-- `render`: Render the value to a string.
-
----
+## Traits (private)
 
 ### `Validate`
 
@@ -167,20 +350,12 @@ pub(crate) trait Validate {
 
 - `validate`: Validate the internal state.
 
-## Impl Blocks
+## Impl Blocks (private)
 
 ### `impl Greeter`
 
 ```rust
 impl Greeter {
-    /// Generate a greeting message.
-    pub fn greet(&self) -> String;
-
-    /// Create a new `Greeter` with the given name.
-    pub fn new(name: &str) -> Self;
-
-    // -- private --
-
     /// Resolve the display name used in greeting output.
     pub(crate) fn display_name(&self) -> &str;
 
@@ -190,69 +365,71 @@ impl Greeter {
 }
 ```
 
-### `impl Render for Greeter`
+// Marker trait implementations
+
+### `impl Send for Config`
 
 ```rust
-impl Render for Greeter {
-    /// Render the current greeting.
-    fn render(&self) -> String;
-
-}
+impl Send for Config;
 ```
 
-## Functions
+### `impl Sync for Config`
 
 ```rust
-/// Compute a value at compile time.
-pub const fn const_add(a: u32, b: u32) -> u32;
+impl Sync for Config;
+```
 
-/// Run the application and return a status message.
-pub fn run() -> String;
+### `impl Unpin for Config`
 
-/// Perform an unsafe low-level operation.
-pub unsafe fn unsafe_op(ptr: *const u8) -> u8;
+```rust
+impl Unpin for Config;
+```
 
-// -- private --
+### `impl Send for LogLevel`
 
+```rust
+impl Send for LogLevel;
+```
+
+### `impl Sync for LogLevel`
+
+```rust
+impl Sync for LogLevel;
+```
+
+### `impl Unpin for LogLevel`
+
+```rust
+impl Unpin for LogLevel;
+```
+
+## Functions (private)
+
+```rust
 /// Resolve an internal status string for diagnostics.
 pub(crate) fn internal_status() -> &'static str;
 
 ```
 
-## Type Aliases
+## Type Aliases (private)
 
 ```rust
-/// A public type alias for results.
-pub type Result<T> = Result<T, String>;
-
-// -- private --
-
 /// An internal type alias for optional strings.
 pub(crate) type OptStr = Option<String>;
 
 ```
 
-## Constants
+## Constants (private)
 
 ```rust
-/// The maximum number of retries.
-pub const MAX_RETRIES: u32 = 3u32;
-
-// -- private --
-
 /// Internal buffer size.
 pub(crate) const BUFFER_SIZE: usize = 1_024usize;
 
 ```
 
-## Statics
+## Statics (private)
 
 ```rust
-/// The application version string.
-pub static VERSION: &str;
-
-// -- private --
-
 /// Internal instance counter.
 pub(crate) static mut INSTANCE_COUNT: u32;
 

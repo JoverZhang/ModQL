@@ -16,14 +16,41 @@ pub struct RustdocOptions {
 }
 ```
 
+## Impl Blocks
+
+// Marker trait implementations
+
+### `impl Send for RustdocOptions`
+
+```rust
+impl Send for RustdocOptions;
+```
+
+### `impl Sync for RustdocOptions`
+
+```rust
+impl Sync for RustdocOptions;
+```
+
+### `impl Unpin for RustdocOptions`
+
+```rust
+impl Unpin for RustdocOptions;
+```
+
 ## Functions
 
 ```rust
 /// Run `cargo +<nightly> rustdoc` and return the deserialized `rustdoc_types::Crate`.
 pub fn generate_rustdoc_json(opts: &RustdocOptions) -> Result<Crate>;
 
-// -- private --
+```
 
+---
+
+## Functions (private)
+
+```rust
 /// Invoke `cargo +<nightly> rustdoc` with the appropriate flags.
 pub(in ::rustdoc_json) fn invoke_cargo_rustdoc(opts: &RustdocOptions) -> Result<()>;
 

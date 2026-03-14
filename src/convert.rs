@@ -565,6 +565,22 @@ fn collect_enum_variants(krate: &Crate, e: &rustdoc_types::Enum) -> Vec<VariantD
     variants
 }
 
+/// Derived traits that should be allowed through the synthetic/span filter.
+const DERIVED_TRAITS: &[&str] = &[
+    "Debug",
+    "Clone",
+    "Copy",
+    "Default",
+    "PartialEq",
+    "Eq",
+    "PartialOrd",
+    "Ord",
+    "Hash",
+];
+
+/// Marker/auto traits that should be allowed through the synthetic/span filter.
+const MARKER_TRAITS: &[&str] = &["Send", "Sync", "Sized", "Unpin"];
+
 fn collect_impl_doc(
     krate: &Crate,
     item: &Item,
@@ -572,7 +588,19 @@ fn collect_impl_doc(
     mode: ConvertMode,
     policy: CollectPolicy,
 ) -> Option<ImplDoc> {
-    if item.span.is_none() || impl_.is_synthetic || !should_include_impl(krate, impl_, mode, policy)
+    let trait_name = impl_
+        .trait_
+        .as_ref()
+        .map(|path| short_type_path(&path.path));
+
+    let allow_synthetic_trait_impl = mode.include_private_items()
+        && trait_name
+            .as_deref()
+            .is_some_and(|name| DERIVED_TRAITS.contains(&name) || MARKER_TRAITS.contains(&name));
+
+    if (!allow_synthetic_trait_impl && item.span.is_none())
+        || (!allow_synthetic_trait_impl && impl_.is_synthetic)
+        || !should_include_impl(krate, impl_, mode, policy)
     {
         return None;
     }
@@ -613,11 +641,32 @@ fn collect_impl_doc(
         return None;
     }
 
+    let target_is_public = match &impl_.for_ {
+        Type::ResolvedPath(path) => item_is_public(krate, &path.id),
+        _ => true,
+    };
+
+    let trait_name = impl_
+        .trait_
+        .as_ref()
+        .map(|path| short_type_path(&path.path));
+
+    let trait_is_public = impl_.trait_.as_ref().map(|path| {
+        krate
+            .index
+            .get(&path.id)
+            .map(|item| is_public_visibility(&item.visibility))
+            .unwrap_or(true)
+    });
+
     Some(ImplDoc {
         header: render_impl_header(impl_),
         docs: item.docs.clone(),
         methods,
         target_name: render_type(&impl_.for_),
+        target_is_public,
+        trait_name,
+        trait_is_public,
     })
 }
 

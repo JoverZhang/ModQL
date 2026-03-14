@@ -2,19 +2,6 @@
 
 [Surface view](module.modql.convert.md)
 
-## Structs
-
----
-
-### `CollectPolicy`
-
-```rust
-pub(in ::convert) struct CollectPolicy {
-    include_private_items: bool,
-    include_private_members: bool,
-}
-```
-
 ## Enums
 
 ### `ConvertMode`
@@ -28,95 +15,21 @@ pub enum ConvertMode {
 }
 ```
 
-## Traits
-
----
-
-### `ItemContainer`
-
-Container trait for dispatching items into the right collection.
-
-```rust
-pub(in ::convert) trait ItemContainer {
-    fn modules_mut(&mut self) -> &mut Vec<ModuleDoc>;
-    fn impls_mut(&mut self) -> &mut Vec<ImplDoc>;
-    fn structs_mut(&mut self) -> &mut Vec<StructDoc>;
-    fn enums_mut(&mut self) -> &mut Vec<EnumDoc>;
-    fn traits_mut(&mut self) -> &mut Vec<TraitDoc>;
-    fn functions_mut(&mut self) -> &mut Vec<FunctionDoc>;
-    fn type_aliases_mut(&mut self) -> &mut Vec<TypeAliasDoc>;
-    fn constants_mut(&mut self) -> &mut Vec<ConstantDoc>;
-    fn statics_mut(&mut self) -> &mut Vec<StaticDoc>;
-}
-```
-
 ## Impl Blocks
 
-### `impl Clone for CollectPolicy`
+### `impl StructuralPartialEq for ConvertMode`
 
 ```rust
-impl Clone for CollectPolicy {
-    fn clone(&self) -> CollectPolicy;
-
-}
+impl StructuralPartialEq for ConvertMode;
 ```
 
-### `impl Copy for CollectPolicy`
-
-```rust
-impl Copy for CollectPolicy;
-```
-
-### `impl Debug for CollectPolicy`
-
-```rust
-impl Debug for CollectPolicy {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result;
-
-}
-```
-
-### `impl Eq for CollectPolicy`
-
-```rust
-impl Eq for CollectPolicy;
-```
-
-### `impl PartialEq for CollectPolicy`
-
-```rust
-impl PartialEq for CollectPolicy {
-    fn eq(&self, other: &CollectPolicy) -> bool;
-
-}
-```
-
-### `impl StructuralPartialEq for CollectPolicy`
-
-```rust
-impl StructuralPartialEq for CollectPolicy;
-```
+// Derived trait implementations
 
 ### `impl Clone for ConvertMode`
 
 ```rust
 impl Clone for ConvertMode {
     fn clone(&self) -> ConvertMode;
-
-}
-```
-
-### `impl ConvertMode`
-
-```rust
-impl ConvertMode {
-    pub(in ::convert) fn include_private_items(self) -> bool;
-
-    pub(in ::convert) fn include_private_members(self) -> bool;
-
-    pub(in ::convert) fn nested_policy(self) -> CollectPolicy;
-
-    pub(in ::convert) fn root_policy(self) -> CollectPolicy;
 
 }
 ```
@@ -151,10 +64,92 @@ impl PartialEq for ConvertMode {
 }
 ```
 
-### `impl StructuralPartialEq for ConvertMode`
+// Marker trait implementations
+
+### `impl Send for ConvertMode`
 
 ```rust
-impl StructuralPartialEq for ConvertMode;
+impl Send for ConvertMode;
+```
+
+### `impl Sync for ConvertMode`
+
+```rust
+impl Sync for ConvertMode;
+```
+
+### `impl Unpin for ConvertMode`
+
+```rust
+impl Unpin for ConvertMode;
+```
+
+## Functions
+
+```rust
+/// Convert a rustdoc JSON `Crate` into our internal `CrateDoc` model.
+pub fn convert(krate: &Crate, mode: ConvertMode) -> Result<CrateDoc>;
+
+pub fn render_type(ty: &Type) -> String;
+
+```
+
+---
+
+## Structs (private)
+
+### `CollectPolicy`
+
+```rust
+pub(in ::convert) struct CollectPolicy {
+    include_private_items: bool,
+    include_private_members: bool,
+}
+```
+
+## Traits (private)
+
+### `ItemContainer`
+
+Container trait for dispatching items into the right collection.
+
+```rust
+pub(in ::convert) trait ItemContainer {
+    fn modules_mut(&mut self) -> &mut Vec<ModuleDoc>;
+    fn impls_mut(&mut self) -> &mut Vec<ImplDoc>;
+    fn structs_mut(&mut self) -> &mut Vec<StructDoc>;
+    fn enums_mut(&mut self) -> &mut Vec<EnumDoc>;
+    fn traits_mut(&mut self) -> &mut Vec<TraitDoc>;
+    fn functions_mut(&mut self) -> &mut Vec<FunctionDoc>;
+    fn type_aliases_mut(&mut self) -> &mut Vec<TypeAliasDoc>;
+    fn constants_mut(&mut self) -> &mut Vec<ConstantDoc>;
+    fn statics_mut(&mut self) -> &mut Vec<StaticDoc>;
+}
+```
+
+## Impl Blocks (private)
+
+### `impl ConvertMode`
+
+```rust
+impl ConvertMode {
+    pub(in ::convert) fn include_private_items(self) -> bool;
+
+    pub(in ::convert) fn include_private_members(self) -> bool;
+
+    pub(in ::convert) fn nested_policy(self) -> CollectPolicy;
+
+    pub(in ::convert) fn root_policy(self) -> CollectPolicy;
+
+}
+```
+
+// Trait implementations
+
+### `impl StructuralPartialEq for CollectPolicy`
+
+```rust
+impl StructuralPartialEq for CollectPolicy;
 ```
 
 ### `impl ItemContainer for CrateDoc`
@@ -207,16 +202,70 @@ impl ItemContainer for ModuleDoc {
 }
 ```
 
-## Functions
+// Derived trait implementations
+
+### `impl Clone for CollectPolicy`
 
 ```rust
-/// Convert a rustdoc JSON `Crate` into our internal `CrateDoc` model.
-pub fn convert(krate: &Crate, mode: ConvertMode) -> Result<CrateDoc>;
+impl Clone for CollectPolicy {
+    fn clone(&self) -> CollectPolicy;
 
-pub fn render_type(ty: &Type) -> String;
+}
+```
 
-// -- private --
+### `impl Copy for CollectPolicy`
 
+```rust
+impl Copy for CollectPolicy;
+```
+
+### `impl Debug for CollectPolicy`
+
+```rust
+impl Debug for CollectPolicy {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result;
+
+}
+```
+
+### `impl Eq for CollectPolicy`
+
+```rust
+impl Eq for CollectPolicy;
+```
+
+### `impl PartialEq for CollectPolicy`
+
+```rust
+impl PartialEq for CollectPolicy {
+    fn eq(&self, other: &CollectPolicy) -> bool;
+
+}
+```
+
+// Marker trait implementations
+
+### `impl Send for CollectPolicy`
+
+```rust
+impl Send for CollectPolicy;
+```
+
+### `impl Sync for CollectPolicy`
+
+```rust
+impl Sync for CollectPolicy;
+```
+
+### `impl Unpin for CollectPolicy`
+
+```rust
+impl Unpin for CollectPolicy;
+```
+
+## Functions (private)
+
+```rust
 pub(in ::convert) fn collect_assoc_impl_docs(krate: &Crate, impl_ids: &[Id], mode: ConvertMode, policy: CollectPolicy) -> Vec<ImplDoc>;
 
 /// Collect enum variants with their fields resolved from the rustdoc index.
@@ -292,6 +341,17 @@ pub(in ::convert) fn sort_items(crate_doc: &mut CrateDoc);
 pub(in ::convert) fn sort_module_items(m: &mut ModuleDoc);
 
 pub(crate) fn strip_visibility_prefix(signature: &str) -> &str;
+
+```
+
+## Constants (private)
+
+```rust
+/// Derived traits that should be allowed through the synthetic/span filter.
+pub(in ::convert) const DERIVED_TRAITS: &[&str];
+
+/// Marker/auto traits that should be allowed through the synthetic/span filter.
+pub(in ::convert) const MARKER_TRAITS: &[&str];
 
 ```
 

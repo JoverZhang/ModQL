@@ -91,8 +91,17 @@ pub struct ImplDoc {
     pub docs: Option<String>,
     pub methods: Vec<MethodDoc>,
     pub target_name: String,
+    pub target_is_public: bool,
+    pub trait_name: Option<String>,
+    pub trait_is_public: Option<bool>,
 }
 ```
+
+#### Fields
+
+- `target_is_public`: Whether the impl target type is public-facing.
+- `trait_name`: Short trait name (e.g. `Render`, `Debug`), `None` for inherent impls.
+- `trait_is_public`: Whether the implemented trait is public-facing. `Some(true/false)` for trait impls, `None` for inherent impls.
 
 ### `MethodDoc`
 
@@ -215,6 +224,8 @@ pub enum VariantKind {
 
 ## Impl Blocks
 
+// Derived trait implementations
+
 ### `impl Clone for ConstantDoc`
 
 ```rust
@@ -247,31 +258,6 @@ impl Clone for CrateDoc {
 ```rust
 impl Debug for CrateDoc {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result;
-
-}
-```
-
-### `impl ItemContainer for CrateDoc`
-
-```rust
-impl ItemContainer for CrateDoc {
-    fn constants_mut(&mut self) -> &mut Vec<ConstantDoc>;
-
-    fn enums_mut(&mut self) -> &mut Vec<EnumDoc>;
-
-    fn functions_mut(&mut self) -> &mut Vec<FunctionDoc>;
-
-    fn impls_mut(&mut self) -> &mut Vec<ImplDoc>;
-
-    fn modules_mut(&mut self) -> &mut Vec<ModuleDoc>;
-
-    fn statics_mut(&mut self) -> &mut Vec<StaticDoc>;
-
-    fn structs_mut(&mut self) -> &mut Vec<StructDoc>;
-
-    fn traits_mut(&mut self) -> &mut Vec<TraitDoc>;
-
-    fn type_aliases_mut(&mut self) -> &mut Vec<TypeAliasDoc>;
 
 }
 ```
@@ -384,31 +370,6 @@ impl Debug for ModuleDoc {
 }
 ```
 
-### `impl ItemContainer for ModuleDoc`
-
-```rust
-impl ItemContainer for ModuleDoc {
-    fn constants_mut(&mut self) -> &mut Vec<ConstantDoc>;
-
-    fn enums_mut(&mut self) -> &mut Vec<EnumDoc>;
-
-    fn functions_mut(&mut self) -> &mut Vec<FunctionDoc>;
-
-    fn impls_mut(&mut self) -> &mut Vec<ImplDoc>;
-
-    fn modules_mut(&mut self) -> &mut Vec<ModuleDoc>;
-
-    fn statics_mut(&mut self) -> &mut Vec<StaticDoc>;
-
-    fn structs_mut(&mut self) -> &mut Vec<StructDoc>;
-
-    fn traits_mut(&mut self) -> &mut Vec<TraitDoc>;
-
-    fn type_aliases_mut(&mut self) -> &mut Vec<TypeAliasDoc>;
-
-}
-```
-
 ### `impl Clone for StaticDoc`
 
 ```rust
@@ -513,6 +474,314 @@ impl Clone for VariantKind {
 ```rust
 impl Debug for VariantKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result;
+
+}
+```
+
+// Marker trait implementations
+
+### `impl Send for ConstantDoc`
+
+```rust
+impl Send for ConstantDoc;
+```
+
+### `impl Sync for ConstantDoc`
+
+```rust
+impl Sync for ConstantDoc;
+```
+
+### `impl Unpin for ConstantDoc`
+
+```rust
+impl Unpin for ConstantDoc;
+```
+
+### `impl Send for CrateDoc`
+
+```rust
+impl Send for CrateDoc;
+```
+
+### `impl Sync for CrateDoc`
+
+```rust
+impl Sync for CrateDoc;
+```
+
+### `impl Unpin for CrateDoc`
+
+```rust
+impl Unpin for CrateDoc;
+```
+
+### `impl Send for EnumDoc`
+
+```rust
+impl Send for EnumDoc;
+```
+
+### `impl Sync for EnumDoc`
+
+```rust
+impl Sync for EnumDoc;
+```
+
+### `impl Unpin for EnumDoc`
+
+```rust
+impl Unpin for EnumDoc;
+```
+
+### `impl Send for FieldDoc`
+
+```rust
+impl Send for FieldDoc;
+```
+
+### `impl Sync for FieldDoc`
+
+```rust
+impl Sync for FieldDoc;
+```
+
+### `impl Unpin for FieldDoc`
+
+```rust
+impl Unpin for FieldDoc;
+```
+
+### `impl Send for FunctionDoc`
+
+```rust
+impl Send for FunctionDoc;
+```
+
+### `impl Sync for FunctionDoc`
+
+```rust
+impl Sync for FunctionDoc;
+```
+
+### `impl Unpin for FunctionDoc`
+
+```rust
+impl Unpin for FunctionDoc;
+```
+
+### `impl Send for ImplDoc`
+
+```rust
+impl Send for ImplDoc;
+```
+
+### `impl Sync for ImplDoc`
+
+```rust
+impl Sync for ImplDoc;
+```
+
+### `impl Unpin for ImplDoc`
+
+```rust
+impl Unpin for ImplDoc;
+```
+
+### `impl Send for MethodDoc`
+
+```rust
+impl Send for MethodDoc;
+```
+
+### `impl Sync for MethodDoc`
+
+```rust
+impl Sync for MethodDoc;
+```
+
+### `impl Unpin for MethodDoc`
+
+```rust
+impl Unpin for MethodDoc;
+```
+
+### `impl Send for ModuleDoc`
+
+```rust
+impl Send for ModuleDoc;
+```
+
+### `impl Sync for ModuleDoc`
+
+```rust
+impl Sync for ModuleDoc;
+```
+
+### `impl Unpin for ModuleDoc`
+
+```rust
+impl Unpin for ModuleDoc;
+```
+
+### `impl Send for StaticDoc`
+
+```rust
+impl Send for StaticDoc;
+```
+
+### `impl Sync for StaticDoc`
+
+```rust
+impl Sync for StaticDoc;
+```
+
+### `impl Unpin for StaticDoc`
+
+```rust
+impl Unpin for StaticDoc;
+```
+
+### `impl Send for StructDoc`
+
+```rust
+impl Send for StructDoc;
+```
+
+### `impl Sync for StructDoc`
+
+```rust
+impl Sync for StructDoc;
+```
+
+### `impl Unpin for StructDoc`
+
+```rust
+impl Unpin for StructDoc;
+```
+
+### `impl Send for TraitDoc`
+
+```rust
+impl Send for TraitDoc;
+```
+
+### `impl Sync for TraitDoc`
+
+```rust
+impl Sync for TraitDoc;
+```
+
+### `impl Unpin for TraitDoc`
+
+```rust
+impl Unpin for TraitDoc;
+```
+
+### `impl Send for TypeAliasDoc`
+
+```rust
+impl Send for TypeAliasDoc;
+```
+
+### `impl Sync for TypeAliasDoc`
+
+```rust
+impl Sync for TypeAliasDoc;
+```
+
+### `impl Unpin for TypeAliasDoc`
+
+```rust
+impl Unpin for TypeAliasDoc;
+```
+
+### `impl Send for VariantDoc`
+
+```rust
+impl Send for VariantDoc;
+```
+
+### `impl Sync for VariantDoc`
+
+```rust
+impl Sync for VariantDoc;
+```
+
+### `impl Unpin for VariantDoc`
+
+```rust
+impl Unpin for VariantDoc;
+```
+
+### `impl Send for VariantKind`
+
+```rust
+impl Send for VariantKind;
+```
+
+### `impl Sync for VariantKind`
+
+```rust
+impl Sync for VariantKind;
+```
+
+### `impl Unpin for VariantKind`
+
+```rust
+impl Unpin for VariantKind;
+```
+
+---
+
+## Impl Blocks (private)
+
+### `impl ItemContainer for CrateDoc`
+
+```rust
+impl ItemContainer for CrateDoc {
+    fn constants_mut(&mut self) -> &mut Vec<ConstantDoc>;
+
+    fn enums_mut(&mut self) -> &mut Vec<EnumDoc>;
+
+    fn functions_mut(&mut self) -> &mut Vec<FunctionDoc>;
+
+    fn impls_mut(&mut self) -> &mut Vec<ImplDoc>;
+
+    fn modules_mut(&mut self) -> &mut Vec<ModuleDoc>;
+
+    fn statics_mut(&mut self) -> &mut Vec<StaticDoc>;
+
+    fn structs_mut(&mut self) -> &mut Vec<StructDoc>;
+
+    fn traits_mut(&mut self) -> &mut Vec<TraitDoc>;
+
+    fn type_aliases_mut(&mut self) -> &mut Vec<TypeAliasDoc>;
+
+}
+```
+
+### `impl ItemContainer for ModuleDoc`
+
+```rust
+impl ItemContainer for ModuleDoc {
+    fn constants_mut(&mut self) -> &mut Vec<ConstantDoc>;
+
+    fn enums_mut(&mut self) -> &mut Vec<EnumDoc>;
+
+    fn functions_mut(&mut self) -> &mut Vec<FunctionDoc>;
+
+    fn impls_mut(&mut self) -> &mut Vec<ImplDoc>;
+
+    fn modules_mut(&mut self) -> &mut Vec<ModuleDoc>;
+
+    fn statics_mut(&mut self) -> &mut Vec<StaticDoc>;
+
+    fn structs_mut(&mut self) -> &mut Vec<StructDoc>;
+
+    fn traits_mut(&mut self) -> &mut Vec<TraitDoc>;
+
+    fn type_aliases_mut(&mut self) -> &mut Vec<TypeAliasDoc>;
 
 }
 ```

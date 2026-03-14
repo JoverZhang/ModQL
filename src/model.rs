@@ -118,6 +118,13 @@ pub struct ImplDoc {
     pub docs: Option<String>,
     pub methods: Vec<MethodDoc>,
     pub target_name: String,
+    /// Whether the impl target type is public-facing.
+    pub target_is_public: bool,
+    /// Short trait name (e.g. `Render`, `Debug`), `None` for inherent impls.
+    pub trait_name: Option<String>,
+    /// Whether the implemented trait is public-facing.
+    /// `Some(true/false)` for trait impls, `None` for inherent impls.
+    pub trait_is_public: Option<bool>,
 }
 
 /// A type alias with its definition.

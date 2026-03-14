@@ -13,7 +13,7 @@
 | [`render_md`](module.modql.render_md.internal.md) |  | [surface](module.modql.render_md.md) |
 | [`rustdoc_json`](module.modql.rustdoc_json.internal.md) |  | [surface](module.modql.rustdoc_json.md) |
 
-## Functions
+## Functions (private)
 
 ```rust
 pub(crate) fn main() -> Result<()>;

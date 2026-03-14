@@ -106,3 +106,41 @@ impl Subcommand for Command {
 }
 ```
 
+// Marker trait implementations
+
+### `impl Send for Cli`
+
+```rust
+impl Send for Cli;
+```
+
+### `impl Sync for Cli`
+
+```rust
+impl Sync for Cli;
+```
+
+### `impl Unpin for Cli`
+
+```rust
+impl Unpin for Cli;
+```
+
+### `impl Send for Command`
+
+```rust
+impl Send for Command;
+```
+
+### `impl Sync for Command`
+
+```rust
+impl Sync for Command;
+```
+
+### `impl Unpin for Command`
+
+```rust
+impl Unpin for Command;
+```
+
