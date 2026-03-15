@@ -9,12 +9,30 @@ pub struct RustdocOptions {
     pub nightly: String,
 }
 
+/// Metadata about a single Cargo package extracted from `cargo metadata`.
+pub struct PackageInfo {
+    /// The package name (e.g. `"mira-cli"`).
+    pub name: String,
+    /// The library target name, if present (e.g. `"mira_core"`).
+    pub lib_target: Option<String>,
+    /// The first binary target name, if present (e.g. `"mira"`).
+    pub bin_target: Option<String>,
+}
+
+impl PackageInfo {
+    /// The target name that will be documented by `cargo rustdoc`.
+    /// Prefers the lib target; falls back to the first bin target.
+    pub fn doc_target_name(&self) -> Option<&str> {
+        self.lib_target.as_deref().or(self.bin_target.as_deref())
+    }
+}
+
 /// Information about the workspace / package layout.
 pub struct WorkspaceInfo {
     /// True when the manifest defines a `[workspace]` with multiple members.
     pub is_workspace: bool,
-    /// Package names discovered via `cargo metadata`.
-    pub packages: Vec<String>,
+    /// Packages discovered via `cargo metadata`.
+    pub packages: Vec<PackageInfo>,
 }
 
 // ---------------------------------------------------------------------------
@@ -36,32 +54,66 @@ pub fn resolve_workspace_info(manifest_path: &Path) -> Result<WorkspaceInfo> {
 
     let is_workspace = workspace_members.len() > 1;
 
-    let package_names: Vec<String> = packages
+    let package_infos: Vec<PackageInfo> = packages
         .iter()
-        .filter_map(|p| p["name"].as_str().map(|s| s.to_string()))
+        .filter_map(|p| {
+            let name = p["name"].as_str()?.to_string();
+            let targets = p["targets"].as_array()?;
+
+            let lib_target = targets.iter().find_map(|t| {
+                let kinds = t["kind"].as_array()?;
+                if kinds.iter().any(|k| k.as_str() == Some("lib")) {
+                    t["name"].as_str().map(|s| s.to_string())
+                } else {
+                    None
+                }
+            });
+
+            let bin_target = targets.iter().find_map(|t| {
+                let kinds = t["kind"].as_array()?;
+                if kinds.iter().any(|k| k.as_str() == Some("bin")) {
+                    t["name"].as_str().map(|s| s.to_string())
+                } else {
+                    None
+                }
+            });
+
+            Some(PackageInfo {
+                name,
+                lib_target,
+                bin_target,
+            })
+        })
         .collect();
 
-    if package_names.is_empty() {
+    if package_infos.is_empty() {
         bail!("No packages found in cargo metadata");
     }
 
     Ok(WorkspaceInfo {
         is_workspace,
-        packages: package_names,
+        packages: package_infos,
     })
 }
 
 /// Run `cargo +<nightly> rustdoc` for a single package and return the
 /// deserialized `rustdoc_types::Crate`.
-///
-/// When `package` is `Some`, the `--package` flag is forwarded to cargo.
 pub fn generate_rustdoc_json(
     opts: &RustdocOptions,
-    package: Option<&str>,
+    pkg: &PackageInfo,
+    is_workspace: bool,
 ) -> Result<rustdoc_types::Crate> {
-    let (target_dir, crate_name) = resolve_metadata(&opts.manifest_path, package)?;
-    invoke_cargo_rustdoc(opts, package)?;
-    let json_path = locate_json(&target_dir, &crate_name)?;
+    let target_dir = resolve_target_dir(&opts.manifest_path)?;
+
+    let doc_target = pkg.doc_target_name().with_context(|| {
+        format!(
+            "Package `{}` has no library or binary target to document",
+            pkg.name
+        )
+    })?;
+
+    invoke_cargo_rustdoc(opts, pkg, is_workspace)?;
+    let json_path = locate_json(&target_dir, doc_target)?;
     read_and_parse(&json_path)
 }
 
@@ -90,35 +142,21 @@ fn run_cargo_metadata(manifest_path: &Path) -> Result<serde_json::Value> {
     serde_json::from_slice(&output.stdout).context("Failed to parse cargo metadata JSON")
 }
 
-/// Use `cargo metadata` to find the target directory and crate name.
-fn resolve_metadata(manifest_path: &Path, package: Option<&str>) -> Result<(PathBuf, String)> {
+/// Extract just the target directory from `cargo metadata`.
+fn resolve_target_dir(manifest_path: &Path) -> Result<PathBuf> {
     let json = run_cargo_metadata(manifest_path)?;
-
     let target_dir = json["target_directory"]
         .as_str()
         .context("cargo metadata missing target_directory")?;
-    let target_dir = PathBuf::from(target_dir);
-
-    let crate_name = if let Some(pkg) = package {
-        pkg.to_string()
-    } else {
-        let packages = json["packages"]
-            .as_array()
-            .context("cargo metadata missing packages array")?;
-        if packages.is_empty() {
-            bail!("No packages found in cargo metadata");
-        }
-        packages[0]["name"]
-            .as_str()
-            .context("Package missing name field")?
-            .to_string()
-    };
-
-    Ok((target_dir, crate_name))
+    Ok(PathBuf::from(target_dir))
 }
 
 /// Invoke `cargo +<nightly> rustdoc` with the appropriate flags.
-fn invoke_cargo_rustdoc(opts: &RustdocOptions, package: Option<&str>) -> Result<()> {
+fn invoke_cargo_rustdoc(
+    opts: &RustdocOptions,
+    pkg: &PackageInfo,
+    is_workspace: bool,
+) -> Result<()> {
     let toolchain_arg = format!("+{}", opts.nightly);
 
     let mut cmd = Command::new("cargo");
@@ -131,8 +169,17 @@ fn invoke_cargo_rustdoc(opts: &RustdocOptions, package: Option<&str>) -> Result<
         .arg("--output-format")
         .arg("json");
 
-    if let Some(pkg) = package {
-        cmd.arg("--package").arg(pkg);
+    // In a workspace we must specify the package.
+    if is_workspace {
+        cmd.arg("--package").arg(&pkg.name);
+    }
+
+    // Explicitly select the target to document so that the extra rustdoc
+    // flags (after `--`) are unambiguous when a package has multiple targets.
+    if pkg.lib_target.is_some() {
+        cmd.arg("--lib");
+    } else if let Some(ref bin) = pkg.bin_target {
+        cmd.arg("--bin").arg(bin);
     }
 
     // Always include private items so we can generate both surface and internal views.
@@ -178,10 +225,10 @@ fn invoke_cargo_rustdoc(opts: &RustdocOptions, package: Option<&str>) -> Result<
 }
 
 /// Find the rustdoc JSON file in the target directory.
-fn locate_json(target_dir: &Path, crate_name: &str) -> Result<PathBuf> {
-    // rustdoc JSON is written to target/doc/<crate_name>.json
-    // The crate name in filenames uses underscores instead of hyphens
-    let file_name = format!("{}.json", crate_name.replace('-', "_"));
+fn locate_json(target_dir: &Path, target_name: &str) -> Result<PathBuf> {
+    // rustdoc JSON is written to target/doc/<target_name>.json
+    // The target name in filenames uses underscores instead of hyphens
+    let file_name = format!("{}.json", target_name.replace('-', "_"));
     let json_path = target_dir.join("doc").join(&file_name);
 
     if json_path.exists() {
