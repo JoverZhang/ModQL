@@ -16,6 +16,8 @@
 ## Functions (private)
 
 ```rust
+pub(crate) fn generate_for_package(opts: &RustdocOptions, pkg: &PackageInfo, out_dir: &Path, is_workspace: bool, prefix: &str) -> Result<()>;
+
 pub(crate) fn main() -> Result<()>;
 
 ```

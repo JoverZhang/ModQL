@@ -9,11 +9,12 @@ build:
 test:
     cargo test
 
-docs:
+modql:
+    rm -rf docs/modql
     mkdir -p docs/modql
     cargo run -- generate --manifest-path Cargo.toml --out docs/modql
 
 all:
     just build
     just test
-    just docs
+    just modql
