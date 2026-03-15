@@ -29,6 +29,8 @@ cargo +nightly rustdoc  ──>  rustdoc JSON  ──>  modql  ──>  Markdown
 
 ## Usage
 
+### Single crate
+
 ```
 modql generate --manifest-path path/to/Cargo.toml
 ```
@@ -41,19 +43,42 @@ To override the output directory:
 modql generate --manifest-path path/to/Cargo.toml --out docs/custom
 ```
 
+### Workspace (multi-crate)
+
+When `--manifest-path` points to a workspace `Cargo.toml` (one with `[workspace]`),
+ModQL automatically discovers all member packages and generates documentation for
+each one into a per-package subdirectory:
+
+```
+modql generate --manifest-path path/to/workspace/Cargo.toml --out docs/modql
+```
+
+This produces:
+
+```
+docs/modql/
+  core/
+    index.md
+    index.internal.md
+    ...
+  service/
+    index.md
+    index.internal.md
+    ...
+```
+
 ### Options
 
 | Flag | Description |
 |------|-------------|
-| `--manifest-path <path>` | Path to the crate's `Cargo.toml` (required) |
+| `--manifest-path <path>` | Path to the crate or workspace `Cargo.toml` (default: `Cargo.toml`) |
 | `--out <dir>` | Output directory for Markdown files (default: `docs/modql`) |
-| `--package <name>` | Package name, for workspaces |
 | `--nightly <toolchain>` | Nightly toolchain name (default: `nightly`) |
 
 ## Example output
 
 ```
-docs/
+docs/modql/
   index.md                           # Public surface view
   index.internal.md                  # Internal view with private symbols
   module.mycrate.utils.md            # Public module page
@@ -78,4 +103,5 @@ cargo build --release
 cargo test
 ```
 
-Tests include unit tests for rendering and naming logic, plus an integration test that generates documentation for a fixture crate and verifies the output structure and content.
+Tests include integration tests that generate documentation for fixture crates and
+verify the output matches golden files.

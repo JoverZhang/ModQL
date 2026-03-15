@@ -21,7 +21,6 @@ pub enum Command {
     Generate {
         manifest_path: PathBuf,
         out: PathBuf,
-        package: Option<String>,
         nightly: String,
     },
 }
@@ -29,7 +28,7 @@ pub enum Command {
 
 #### Variants
 
-- `Generate`: Generate Markdown documentation from a Rust crate
+- `Generate`: Generate Markdown documentation from a Rust crate or workspace
 
 ## Impl Blocks
 

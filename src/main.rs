@@ -19,26 +19,63 @@ fn main() -> Result<()> {
         Command::Generate {
             manifest_path,
             out,
-            package,
             nightly,
         } => {
-            eprintln!("Generating rustdoc JSON...");
-            let krate = rustdoc_json::generate_rustdoc_json(&RustdocOptions {
-                manifest_path,
-                package,
-                nightly,
-            })?;
+            let info = rustdoc_json::resolve_workspace_info(&manifest_path)?;
 
-            eprintln!("Converting public surface...");
-            let surface_doc = convert::convert(&krate, ConvertMode::Surface)?;
+            if info.is_workspace {
+                eprintln!(
+                    "Detected workspace with {} packages: {}",
+                    info.packages.len(),
+                    info.packages.join(", ")
+                );
 
-            eprintln!("Converting internal view...");
-            let internal_doc = convert::convert(&krate, ConvertMode::Internal)?;
+                let opts = RustdocOptions {
+                    manifest_path,
+                    nightly,
+                };
 
-            eprintln!("Rendering Markdown to {}...", out.display());
-            render_md::render(&surface_doc, &internal_doc, &out)?;
+                for pkg_name in &info.packages {
+                    let pkg_out = out.join(pkg_name);
+                    eprintln!("\n--- Generating docs for package `{pkg_name}` ---");
 
-            eprintln!("Done. Documentation written to {}", out.display());
+                    eprintln!("  Generating rustdoc JSON...");
+                    let krate =
+                        rustdoc_json::generate_rustdoc_json(&opts, Some(pkg_name.as_str()))?;
+
+                    eprintln!("  Converting public surface...");
+                    let surface_doc = convert::convert(&krate, ConvertMode::Surface)?;
+
+                    eprintln!("  Converting internal view...");
+                    let internal_doc = convert::convert(&krate, ConvertMode::Internal)?;
+
+                    eprintln!("  Rendering Markdown to {}...", pkg_out.display());
+                    render_md::render(&surface_doc, &internal_doc, &pkg_out)?;
+
+                    eprintln!("  Done. Documentation written to {}", pkg_out.display());
+                }
+
+                eprintln!("\nAll packages processed.");
+            } else {
+                let opts = RustdocOptions {
+                    manifest_path,
+                    nightly,
+                };
+
+                eprintln!("Generating rustdoc JSON...");
+                let krate = rustdoc_json::generate_rustdoc_json(&opts, None)?;
+
+                eprintln!("Converting public surface...");
+                let surface_doc = convert::convert(&krate, ConvertMode::Surface)?;
+
+                eprintln!("Converting internal view...");
+                let internal_doc = convert::convert(&krate, ConvertMode::Internal)?;
+
+                eprintln!("Rendering Markdown to {}...", out.display());
+                render_md::render(&surface_doc, &internal_doc, &out)?;
+
+                eprintln!("Done. Documentation written to {}", out.display());
+            }
         }
     }
 

@@ -1,29 +1,79 @@
 /// Invoke `cargo rustdoc` to produce JSON output and read the result.
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 /// Options for generating rustdoc JSON.
 pub struct RustdocOptions {
     pub manifest_path: PathBuf,
-    pub package: Option<String>,
     pub nightly: String,
 }
 
-/// Run `cargo +<nightly> rustdoc` and return the deserialized `rustdoc_types::Crate`.
-pub fn generate_rustdoc_json(opts: &RustdocOptions) -> Result<rustdoc_types::Crate> {
-    let (target_dir, crate_name) = resolve_metadata(opts)?;
-    invoke_cargo_rustdoc(opts)?;
+/// Information about the workspace / package layout.
+pub struct WorkspaceInfo {
+    /// True when the manifest defines a `[workspace]` with multiple members.
+    pub is_workspace: bool,
+    /// Package names discovered via `cargo metadata`.
+    pub packages: Vec<String>,
+}
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+/// Inspect the manifest via `cargo metadata` and decide whether we are dealing
+/// with a single crate or a workspace with multiple members.
+pub fn resolve_workspace_info(manifest_path: &Path) -> Result<WorkspaceInfo> {
+    let json = run_cargo_metadata(manifest_path)?;
+
+    let packages = json["packages"]
+        .as_array()
+        .context("cargo metadata missing packages array")?;
+
+    let workspace_members = json["workspace_members"]
+        .as_array()
+        .context("cargo metadata missing workspace_members")?;
+
+    let is_workspace = workspace_members.len() > 1;
+
+    let package_names: Vec<String> = packages
+        .iter()
+        .filter_map(|p| p["name"].as_str().map(|s| s.to_string()))
+        .collect();
+
+    if package_names.is_empty() {
+        bail!("No packages found in cargo metadata");
+    }
+
+    Ok(WorkspaceInfo {
+        is_workspace,
+        packages: package_names,
+    })
+}
+
+/// Run `cargo +<nightly> rustdoc` for a single package and return the
+/// deserialized `rustdoc_types::Crate`.
+///
+/// When `package` is `Some`, the `--package` flag is forwarded to cargo.
+pub fn generate_rustdoc_json(
+    opts: &RustdocOptions,
+    package: Option<&str>,
+) -> Result<rustdoc_types::Crate> {
+    let (target_dir, crate_name) = resolve_metadata(&opts.manifest_path, package)?;
+    invoke_cargo_rustdoc(opts, package)?;
     let json_path = locate_json(&target_dir, &crate_name)?;
     read_and_parse(&json_path)
 }
 
-/// Use `cargo metadata` to find the target directory and crate name.
-fn resolve_metadata(opts: &RustdocOptions) -> Result<(PathBuf, String)> {
+// ---------------------------------------------------------------------------
+// Internals
+// ---------------------------------------------------------------------------
+
+fn run_cargo_metadata(manifest_path: &Path) -> Result<serde_json::Value> {
     let mut cmd = Command::new("cargo");
     cmd.arg("metadata")
         .arg("--manifest-path")
-        .arg(&opts.manifest_path)
+        .arg(manifest_path)
         .arg("--no-deps")
         .arg("--format-version")
         .arg("1");
@@ -37,16 +87,20 @@ fn resolve_metadata(opts: &RustdocOptions) -> Result<(PathBuf, String)> {
         bail!("cargo metadata failed:\n{stderr}");
     }
 
-    let json: serde_json::Value =
-        serde_json::from_slice(&output.stdout).context("Failed to parse cargo metadata JSON")?;
+    serde_json::from_slice(&output.stdout).context("Failed to parse cargo metadata JSON")
+}
+
+/// Use `cargo metadata` to find the target directory and crate name.
+fn resolve_metadata(manifest_path: &Path, package: Option<&str>) -> Result<(PathBuf, String)> {
+    let json = run_cargo_metadata(manifest_path)?;
 
     let target_dir = json["target_directory"]
         .as_str()
         .context("cargo metadata missing target_directory")?;
     let target_dir = PathBuf::from(target_dir);
 
-    let crate_name = if let Some(ref pkg) = opts.package {
-        pkg.clone()
+    let crate_name = if let Some(pkg) = package {
+        pkg.to_string()
     } else {
         let packages = json["packages"]
             .as_array()
@@ -64,7 +118,7 @@ fn resolve_metadata(opts: &RustdocOptions) -> Result<(PathBuf, String)> {
 }
 
 /// Invoke `cargo +<nightly> rustdoc` with the appropriate flags.
-fn invoke_cargo_rustdoc(opts: &RustdocOptions) -> Result<()> {
+fn invoke_cargo_rustdoc(opts: &RustdocOptions, package: Option<&str>) -> Result<()> {
     let toolchain_arg = format!("+{}", opts.nightly);
 
     let mut cmd = Command::new("cargo");
@@ -77,7 +131,7 @@ fn invoke_cargo_rustdoc(opts: &RustdocOptions) -> Result<()> {
         .arg("--output-format")
         .arg("json");
 
-    if let Some(ref pkg) = opts.package {
+    if let Some(pkg) = package {
         cmd.arg("--package").arg(pkg);
     }
 
