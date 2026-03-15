@@ -3,6 +3,13 @@ set shell := ["bash", "-cu"]
 default:
     just --list
 
+clean:
+    cargo clean
+    cd tests/fixtures/simple && cargo clean
+    cd tests/fixtures/workspace && cargo clean
+    cd tests/fixtures/advanced && cargo clean
+
+
 build:
     cargo build
 
