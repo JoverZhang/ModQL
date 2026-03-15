@@ -19,9 +19,11 @@ pub fn resolve_workspace_info(manifest_path: &Path) -> Result<WorkspaceInfo>;
 
 ```
 
-## Impl Blocks
+## Impl
 
 ```rust
-impl PackageInfo;
+impl PackageInfo {
+    pub fn doc_target_name(&self) -> Option<&str>;
+}
 ```
 

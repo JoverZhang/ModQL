@@ -4,11 +4,8 @@
 
 ## Structs
 
-### `ConstantDoc`
-
-A constant with its type and value.
-
 ```rust
+/// A constant with its type and value.
 pub struct ConstantDoc {
     pub qualified_name: String,
     pub docs: Option<String>,
@@ -17,15 +14,12 @@ pub struct ConstantDoc {
 }
 ```
 
-### `CrateDoc`
-
-Internal documentation model, independent from rustdoc JSON types.
-
-This model represents the documentation structure that will be rendered
-to Markdown. It is produced by the conversion layer from rustdoc JSON.
-Top-level crate documentation.
-
 ```rust
+/// Internal documentation model, independent from rustdoc JSON types.
+///
+/// This model represents the documentation structure that will be rendered
+/// to Markdown. It is produced by the conversion layer from rustdoc JSON.
+/// Top-level crate documentation.
 pub struct CrateDoc {
     pub name: String,
     pub docs: Option<String>,
@@ -41,25 +35,20 @@ pub struct CrateDoc {
 }
 ```
 
-### `EnumDoc`
-
-An enum with its variants, inherent methods, and signature.
-
 ```rust
+/// An enum with its variants, inherent methods, and signature.
 pub struct EnumDoc {
     pub qualified_name: String,
     pub docs: Option<String>,
     pub signature: String,
     pub variants: Vec<VariantDoc>,
     pub is_public: bool,
+    pub derived_traits: Vec<String>,
 }
 ```
 
-### `FieldDoc`
-
-A struct field with its type and documentation.
-
 ```rust
+/// A struct field with its type and documentation.
 pub struct FieldDoc {
     pub name: String,
     pub type_str: String,
@@ -68,11 +57,8 @@ pub struct FieldDoc {
 }
 ```
 
-### `FunctionDoc`
-
-A free function (not a method).
-
 ```rust
+/// A free function (not a method).
 pub struct FunctionDoc {
     pub qualified_name: String,
     pub docs: Option<String>,
@@ -81,11 +67,8 @@ pub struct FunctionDoc {
 }
 ```
 
-### `ImplDoc`
-
-An impl block defined in a module.
-
 ```rust
+/// An impl block defined in a module.
 pub struct ImplDoc {
     pub header: String,
     pub docs: Option<String>,
@@ -97,17 +80,8 @@ pub struct ImplDoc {
 }
 ```
 
-#### Fields
-
-- `target_is_public`: Whether the impl target type is public-facing.
-- `trait_name`: Short trait name (e.g. `Render`, `Debug`), `None` for inherent impls.
-- `trait_is_public`: Whether the implemented trait is public-facing. `Some(true/false)` for trait impls, `None` for inherent impls.
-
-### `MethodDoc`
-
-A method belonging to a type or trait.
-
 ```rust
+/// A method belonging to a type or trait.
 pub struct MethodDoc {
     pub name: String,
     pub docs: Option<String>,
@@ -116,11 +90,8 @@ pub struct MethodDoc {
 }
 ```
 
-### `ModuleDoc`
-
-A module and its contents.
-
 ```rust
+/// A module and its contents.
 pub struct ModuleDoc {
     pub qualified_name: String,
     pub docs: Option<String>,
@@ -136,11 +107,8 @@ pub struct ModuleDoc {
 }
 ```
 
-### `StaticDoc`
-
-A static variable with its type.
-
 ```rust
+/// A static variable with its type.
 pub struct StaticDoc {
     pub qualified_name: String,
     pub docs: Option<String>,
@@ -149,25 +117,20 @@ pub struct StaticDoc {
 }
 ```
 
-### `StructDoc`
-
-A struct with its fields, inherent methods, and signature.
-
 ```rust
+/// A struct with its fields, inherent methods, and signature.
 pub struct StructDoc {
     pub qualified_name: String,
     pub docs: Option<String>,
     pub signature: String,
     pub fields: Vec<FieldDoc>,
     pub is_public: bool,
+    pub derived_traits: Vec<String>,
 }
 ```
 
-### `TraitDoc`
-
-A trait with its required and provided methods.
-
 ```rust
+/// A trait with its required and provided methods.
 pub struct TraitDoc {
     pub qualified_name: String,
     pub docs: Option<String>,
@@ -177,11 +140,8 @@ pub struct TraitDoc {
 }
 ```
 
-### `TypeAliasDoc`
-
-A type alias with its definition.
-
 ```rust
+/// A type alias with its definition.
 pub struct TypeAliasDoc {
     pub qualified_name: String,
     pub docs: Option<String>,
@@ -190,11 +150,8 @@ pub struct TypeAliasDoc {
 }
 ```
 
-### `VariantDoc`
-
-An enum variant with its documentation.
-
 ```rust
+/// An enum variant with its documentation.
 pub struct VariantDoc {
     pub name: String,
     pub docs: Option<String>,
@@ -204,11 +161,8 @@ pub struct VariantDoc {
 
 ## Enums
 
-### `VariantKind`
-
-Kind of enum variant.
-
 ```rust
+/// Kind of enum variant.
 pub enum VariantKind {
     Plain,
     Tuple(Vec<String>),
@@ -216,573 +170,5 @@ pub enum VariantKind {
 }
 ```
 
-#### Variants
-
-- `Plain`: A plain variant with no data (e.g. `Foo`).
-- `Tuple`: A tuple variant (e.g. `Foo(u32, String)`).
-- `Struct`: A struct variant (e.g. `Foo { bar: u32 }`).
-
-## Impl Blocks
-
-// Derived trait implementations
-
-### `impl Clone for ConstantDoc`
-
-```rust
-impl Clone for ConstantDoc {
-    fn clone(&self) -> ConstantDoc;
-
-}
-```
-
-### `impl Debug for ConstantDoc`
-
-```rust
-impl Debug for ConstantDoc {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result;
-
-}
-```
-
-### `impl Clone for CrateDoc`
-
-```rust
-impl Clone for CrateDoc {
-    fn clone(&self) -> CrateDoc;
-
-}
-```
-
-### `impl Debug for CrateDoc`
-
-```rust
-impl Debug for CrateDoc {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result;
-
-}
-```
-
-### `impl Clone for EnumDoc`
-
-```rust
-impl Clone for EnumDoc {
-    fn clone(&self) -> EnumDoc;
-
-}
-```
-
-### `impl Debug for EnumDoc`
-
-```rust
-impl Debug for EnumDoc {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result;
-
-}
-```
-
-### `impl Clone for FieldDoc`
-
-```rust
-impl Clone for FieldDoc {
-    fn clone(&self) -> FieldDoc;
-
-}
-```
-
-### `impl Debug for FieldDoc`
-
-```rust
-impl Debug for FieldDoc {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result;
-
-}
-```
-
-### `impl Clone for FunctionDoc`
-
-```rust
-impl Clone for FunctionDoc {
-    fn clone(&self) -> FunctionDoc;
-
-}
-```
-
-### `impl Debug for FunctionDoc`
-
-```rust
-impl Debug for FunctionDoc {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result;
-
-}
-```
-
-### `impl Clone for ImplDoc`
-
-```rust
-impl Clone for ImplDoc {
-    fn clone(&self) -> ImplDoc;
-
-}
-```
-
-### `impl Debug for ImplDoc`
-
-```rust
-impl Debug for ImplDoc {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result;
-
-}
-```
-
-### `impl Clone for MethodDoc`
-
-```rust
-impl Clone for MethodDoc {
-    fn clone(&self) -> MethodDoc;
-
-}
-```
-
-### `impl Debug for MethodDoc`
-
-```rust
-impl Debug for MethodDoc {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result;
-
-}
-```
-
-### `impl Clone for ModuleDoc`
-
-```rust
-impl Clone for ModuleDoc {
-    fn clone(&self) -> ModuleDoc;
-
-}
-```
-
-### `impl Debug for ModuleDoc`
-
-```rust
-impl Debug for ModuleDoc {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result;
-
-}
-```
-
-### `impl Clone for StaticDoc`
-
-```rust
-impl Clone for StaticDoc {
-    fn clone(&self) -> StaticDoc;
-
-}
-```
-
-### `impl Debug for StaticDoc`
-
-```rust
-impl Debug for StaticDoc {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result;
-
-}
-```
-
-### `impl Clone for StructDoc`
-
-```rust
-impl Clone for StructDoc {
-    fn clone(&self) -> StructDoc;
-
-}
-```
-
-### `impl Debug for StructDoc`
-
-```rust
-impl Debug for StructDoc {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result;
-
-}
-```
-
-### `impl Clone for TraitDoc`
-
-```rust
-impl Clone for TraitDoc {
-    fn clone(&self) -> TraitDoc;
-
-}
-```
-
-### `impl Debug for TraitDoc`
-
-```rust
-impl Debug for TraitDoc {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result;
-
-}
-```
-
-### `impl Clone for TypeAliasDoc`
-
-```rust
-impl Clone for TypeAliasDoc {
-    fn clone(&self) -> TypeAliasDoc;
-
-}
-```
-
-### `impl Debug for TypeAliasDoc`
-
-```rust
-impl Debug for TypeAliasDoc {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result;
-
-}
-```
-
-### `impl Clone for VariantDoc`
-
-```rust
-impl Clone for VariantDoc {
-    fn clone(&self) -> VariantDoc;
-
-}
-```
-
-### `impl Debug for VariantDoc`
-
-```rust
-impl Debug for VariantDoc {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result;
-
-}
-```
-
-### `impl Clone for VariantKind`
-
-```rust
-impl Clone for VariantKind {
-    fn clone(&self) -> VariantKind;
-
-}
-```
-
-### `impl Debug for VariantKind`
-
-```rust
-impl Debug for VariantKind {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result;
-
-}
-```
-
-// Marker trait implementations
-
-### `impl Send for ConstantDoc`
-
-```rust
-impl Send for ConstantDoc;
-```
-
-### `impl Sync for ConstantDoc`
-
-```rust
-impl Sync for ConstantDoc;
-```
-
-### `impl Unpin for ConstantDoc`
-
-```rust
-impl Unpin for ConstantDoc;
-```
-
-### `impl Send for CrateDoc`
-
-```rust
-impl Send for CrateDoc;
-```
-
-### `impl Sync for CrateDoc`
-
-```rust
-impl Sync for CrateDoc;
-```
-
-### `impl Unpin for CrateDoc`
-
-```rust
-impl Unpin for CrateDoc;
-```
-
-### `impl Send for EnumDoc`
-
-```rust
-impl Send for EnumDoc;
-```
-
-### `impl Sync for EnumDoc`
-
-```rust
-impl Sync for EnumDoc;
-```
-
-### `impl Unpin for EnumDoc`
-
-```rust
-impl Unpin for EnumDoc;
-```
-
-### `impl Send for FieldDoc`
-
-```rust
-impl Send for FieldDoc;
-```
-
-### `impl Sync for FieldDoc`
-
-```rust
-impl Sync for FieldDoc;
-```
-
-### `impl Unpin for FieldDoc`
-
-```rust
-impl Unpin for FieldDoc;
-```
-
-### `impl Send for FunctionDoc`
-
-```rust
-impl Send for FunctionDoc;
-```
-
-### `impl Sync for FunctionDoc`
-
-```rust
-impl Sync for FunctionDoc;
-```
-
-### `impl Unpin for FunctionDoc`
-
-```rust
-impl Unpin for FunctionDoc;
-```
-
-### `impl Send for ImplDoc`
-
-```rust
-impl Send for ImplDoc;
-```
-
-### `impl Sync for ImplDoc`
-
-```rust
-impl Sync for ImplDoc;
-```
-
-### `impl Unpin for ImplDoc`
-
-```rust
-impl Unpin for ImplDoc;
-```
-
-### `impl Send for MethodDoc`
-
-```rust
-impl Send for MethodDoc;
-```
-
-### `impl Sync for MethodDoc`
-
-```rust
-impl Sync for MethodDoc;
-```
-
-### `impl Unpin for MethodDoc`
-
-```rust
-impl Unpin for MethodDoc;
-```
-
-### `impl Send for ModuleDoc`
-
-```rust
-impl Send for ModuleDoc;
-```
-
-### `impl Sync for ModuleDoc`
-
-```rust
-impl Sync for ModuleDoc;
-```
-
-### `impl Unpin for ModuleDoc`
-
-```rust
-impl Unpin for ModuleDoc;
-```
-
-### `impl Send for StaticDoc`
-
-```rust
-impl Send for StaticDoc;
-```
-
-### `impl Sync for StaticDoc`
-
-```rust
-impl Sync for StaticDoc;
-```
-
-### `impl Unpin for StaticDoc`
-
-```rust
-impl Unpin for StaticDoc;
-```
-
-### `impl Send for StructDoc`
-
-```rust
-impl Send for StructDoc;
-```
-
-### `impl Sync for StructDoc`
-
-```rust
-impl Sync for StructDoc;
-```
-
-### `impl Unpin for StructDoc`
-
-```rust
-impl Unpin for StructDoc;
-```
-
-### `impl Send for TraitDoc`
-
-```rust
-impl Send for TraitDoc;
-```
-
-### `impl Sync for TraitDoc`
-
-```rust
-impl Sync for TraitDoc;
-```
-
-### `impl Unpin for TraitDoc`
-
-```rust
-impl Unpin for TraitDoc;
-```
-
-### `impl Send for TypeAliasDoc`
-
-```rust
-impl Send for TypeAliasDoc;
-```
-
-### `impl Sync for TypeAliasDoc`
-
-```rust
-impl Sync for TypeAliasDoc;
-```
-
-### `impl Unpin for TypeAliasDoc`
-
-```rust
-impl Unpin for TypeAliasDoc;
-```
-
-### `impl Send for VariantDoc`
-
-```rust
-impl Send for VariantDoc;
-```
-
-### `impl Sync for VariantDoc`
-
-```rust
-impl Sync for VariantDoc;
-```
-
-### `impl Unpin for VariantDoc`
-
-```rust
-impl Unpin for VariantDoc;
-```
-
-### `impl Send for VariantKind`
-
-```rust
-impl Send for VariantKind;
-```
-
-### `impl Sync for VariantKind`
-
-```rust
-impl Sync for VariantKind;
-```
-
-### `impl Unpin for VariantKind`
-
-```rust
-impl Unpin for VariantKind;
-```
-
 ---
-
-## Impl Blocks (private)
-
-### `impl ItemContainer for CrateDoc`
-
-```rust
-impl ItemContainer for CrateDoc {
-    fn constants_mut(&mut self) -> &mut Vec<ConstantDoc>;
-
-    fn enums_mut(&mut self) -> &mut Vec<EnumDoc>;
-
-    fn functions_mut(&mut self) -> &mut Vec<FunctionDoc>;
-
-    fn impls_mut(&mut self) -> &mut Vec<ImplDoc>;
-
-    fn modules_mut(&mut self) -> &mut Vec<ModuleDoc>;
-
-    fn statics_mut(&mut self) -> &mut Vec<StaticDoc>;
-
-    fn structs_mut(&mut self) -> &mut Vec<StructDoc>;
-
-    fn traits_mut(&mut self) -> &mut Vec<TraitDoc>;
-
-    fn type_aliases_mut(&mut self) -> &mut Vec<TypeAliasDoc>;
-
-}
-```
-
-### `impl ItemContainer for ModuleDoc`
-
-```rust
-impl ItemContainer for ModuleDoc {
-    fn constants_mut(&mut self) -> &mut Vec<ConstantDoc>;
-
-    fn enums_mut(&mut self) -> &mut Vec<EnumDoc>;
-
-    fn functions_mut(&mut self) -> &mut Vec<FunctionDoc>;
-
-    fn impls_mut(&mut self) -> &mut Vec<ImplDoc>;
-
-    fn modules_mut(&mut self) -> &mut Vec<ModuleDoc>;
-
-    fn statics_mut(&mut self) -> &mut Vec<StaticDoc>;
-
-    fn structs_mut(&mut self) -> &mut Vec<StructDoc>;
-
-    fn traits_mut(&mut self) -> &mut Vec<TraitDoc>;
-
-    fn type_aliases_mut(&mut self) -> &mut Vec<TypeAliasDoc>;
-
-}
-```
 

@@ -4,11 +4,8 @@
 
 ## Structs
 
-### `PackageInfo`
-
-Metadata about a single Cargo package extracted from `cargo metadata`.
-
 ```rust
+/// Metadata about a single Cargo package extracted from `cargo metadata`.
 pub struct PackageInfo {
     pub name: String,
     pub lib_target: Option<String>,
@@ -16,42 +13,23 @@ pub struct PackageInfo {
 }
 ```
 
-#### Fields
-
-- `name`: The package name (e.g. `"mira-cli"`).
-- `lib_target`: The library target name, if present (e.g. `"mira_core"`).
-- `bin_target`: The first binary target name, if present (e.g. `"mira"`).
-
-### `RustdocOptions`
-
-Options for generating rustdoc JSON.
-
 ```rust
+/// Options for generating rustdoc JSON.
 pub struct RustdocOptions {
     pub manifest_path: PathBuf,
     pub nightly: String,
 }
 ```
 
-### `WorkspaceInfo`
-
-Information about the workspace / package layout.
-
 ```rust
+/// Information about the workspace / package layout.
 pub struct WorkspaceInfo {
     pub is_workspace: bool,
     pub packages: Vec<PackageInfo>,
 }
 ```
 
-#### Fields
-
-- `is_workspace`: True when the manifest defines a `[workspace]` with multiple members.
-- `packages`: Packages discovered via `cargo metadata`.
-
-## Impl Blocks
-
-### `impl PackageInfo`
+## Impl
 
 ```rust
 impl PackageInfo {
@@ -60,62 +38,6 @@ impl PackageInfo {
     pub fn doc_target_name(&self) -> Option<&str>;
 
 }
-```
-
-// Marker trait implementations
-
-### `impl Send for PackageInfo`
-
-```rust
-impl Send for PackageInfo;
-```
-
-### `impl Sync for PackageInfo`
-
-```rust
-impl Sync for PackageInfo;
-```
-
-### `impl Unpin for PackageInfo`
-
-```rust
-impl Unpin for PackageInfo;
-```
-
-### `impl Send for RustdocOptions`
-
-```rust
-impl Send for RustdocOptions;
-```
-
-### `impl Sync for RustdocOptions`
-
-```rust
-impl Sync for RustdocOptions;
-```
-
-### `impl Unpin for RustdocOptions`
-
-```rust
-impl Unpin for RustdocOptions;
-```
-
-### `impl Send for WorkspaceInfo`
-
-```rust
-impl Send for WorkspaceInfo;
-```
-
-### `impl Sync for WorkspaceInfo`
-
-```rust
-impl Sync for WorkspaceInfo;
-```
-
-### `impl Unpin for WorkspaceInfo`
-
-```rust
-impl Unpin for WorkspaceInfo;
 ```
 
 ## Functions

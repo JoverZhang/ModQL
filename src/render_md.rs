@@ -10,8 +10,8 @@ use std::path::Path;
 
 use crate::convert::strip_visibility_prefix;
 use crate::model::{
-    ConstantDoc, CrateDoc, EnumDoc, FieldDoc, FunctionDoc, ImplDoc, MethodDoc, ModuleDoc,
-    StaticDoc, StructDoc, TraitDoc, TypeAliasDoc, VariantDoc,
+    ConstantDoc, CrateDoc, EnumDoc, FunctionDoc, ImplDoc, MethodDoc, ModuleDoc, StaticDoc,
+    StructDoc, TraitDoc, TypeAliasDoc,
 };
 use crate::naming;
 
@@ -57,15 +57,12 @@ pub fn render(surface_doc: &CrateDoc, internal_doc: &CrateDoc, out_dir: &Path) -
 
     let surface_modules = collect_module_names(&surface_doc.modules);
 
+    // Crate-level index is a single merged page (internal view, no separate
+    // surface/internal split). Module pages still get the split.
     write_page(
         out_dir,
         naming::crate_index_file(),
-        &render_crate_page(surface_doc, ViewKind::Surface, &surface_modules),
-    )?;
-    write_page(
-        out_dir,
-        naming::internal_crate_index_file(),
-        &render_crate_page(internal_doc, ViewKind::Internal, &surface_modules),
+        &render_crate_page(internal_doc, &surface_modules),
     )?;
 
     for module in &surface_doc.modules {
@@ -114,16 +111,11 @@ fn write_page(out_dir: &Path, filename: &str, content: &str) -> Result<()> {
     Ok(())
 }
 
-fn render_crate_page(
-    crate_doc: &CrateDoc,
-    view: ViewKind,
-    surface_modules: &BTreeSet<String>,
-) -> String {
+fn render_crate_page(crate_doc: &CrateDoc, surface_modules: &BTreeSet<String>) -> String {
     let mut out = String::new();
 
-    let _ = writeln!(out, "# {}Crate `{}`", view.title_prefix(), crate_doc.name);
+    let _ = writeln!(out, "# Crate `{}`", crate_doc.name);
     out.push('\n');
-    render_view_link(&mut out, None, view, true);
 
     if let Some(ref docs) = crate_doc.docs {
         render_docs_paragraph(&mut out, docs);
@@ -131,11 +123,16 @@ fn render_crate_page(
 
     if !crate_doc.modules.is_empty() {
         let _ = writeln!(out, "## Modules\n");
-        render_module_listing(&mut out, &crate_doc.modules, view, surface_modules);
+        render_module_listing(
+            &mut out,
+            &crate_doc.modules,
+            ViewKind::Internal,
+            surface_modules,
+        );
         out.push('\n');
     }
 
-    render_body_sections(&mut out, crate_doc, view);
+    render_body_sections(&mut out, crate_doc, ViewKind::Internal);
 
     out
 }
@@ -155,7 +152,7 @@ fn render_module_page(
     );
     out.push('\n');
     let has_surface = surface_modules.contains(&module.qualified_name);
-    render_view_link(&mut out, Some(&module.qualified_name), view, has_surface);
+    render_view_link(&mut out, &module.qualified_name, view, has_surface);
 
     if let Some(ref docs) = module.docs {
         render_docs_paragraph(&mut out, docs);
@@ -172,23 +169,14 @@ fn render_module_page(
     out
 }
 
-fn render_view_link(
-    out: &mut String,
-    qualified_name: Option<&str>,
-    view: ViewKind,
-    has_surface: bool,
-) {
+fn render_view_link(out: &mut String, qualified_name: &str, view: ViewKind, has_surface: bool) {
     match view {
         ViewKind::Surface => {
-            let path = qualified_name
-                .map(naming::internal_module_file_name)
-                .unwrap_or_else(|| naming::internal_crate_index_file().to_string());
+            let path = naming::internal_module_file_name(qualified_name);
             let _ = writeln!(out, "[Internal view]({path})\n");
         }
         ViewKind::Internal if has_surface => {
-            let path = qualified_name
-                .map(naming::module_file_name)
-                .unwrap_or_else(|| naming::crate_index_file().to_string());
+            let path = naming::module_file_name(qualified_name);
             let _ = writeln!(out, "[Surface view]({path})\n");
         }
         ViewKind::Internal => {}
@@ -310,16 +298,7 @@ fn render_surface_sections(
     constants: &[ConstantDoc],
     statics: &[StaticDoc],
 ) {
-    render_types_summary_section(out, structs, enums, traits);
-    render_signature_block_section(
-        out,
-        "Functions",
-        functions
-            .iter()
-            .map(|function| (None, function.signature.as_str(), true)),
-        false,
-    );
-    render_impl_headers_section(out, impls);
+    // Type aliases and constants first, then types
     render_signature_block_section(
         out,
         "Type Aliases",
@@ -336,6 +315,16 @@ fn render_surface_sections(
             .map(|item| (None, item.signature.as_str(), true)),
         false,
     );
+    render_types_summary_section(out, structs, enums, traits);
+    render_signature_block_section(
+        out,
+        "Functions",
+        functions
+            .iter()
+            .map(|function| (None, function.signature.as_str(), true)),
+        false,
+    );
+    render_surface_inherent_impls_section(out, impls);
     render_signature_block_section(
         out,
         "Statics",
@@ -350,44 +339,10 @@ fn render_surface_sections(
 // Two-zone internal rendering
 // ---------------------------------------------------------------------------
 
-/// Derived traits used for impl categorization.
-const DERIVED_TRAITS: &[&str] = &[
-    "Debug",
-    "Clone",
-    "Copy",
-    "Default",
-    "PartialEq",
-    "Eq",
-    "PartialOrd",
-    "Ord",
-    "Hash",
-];
-
-/// Marker/auto traits used for impl categorization.
-const MARKER_TRAITS: &[&str] = &["Send", "Sync", "Sized", "Unpin"];
-
 /// A view of an impl block filtered to only certain methods.
 struct RenderedImplZone<'a> {
     impl_doc: &'a ImplDoc,
     methods: Vec<&'a MethodDoc>,
-}
-
-/// Category for ordering impl blocks within a zone.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-enum ImplCategory {
-    Inherent,
-    ManualTrait,
-    DerivedTrait,
-    MarkerTrait,
-}
-
-fn impl_category(impl_doc: &ImplDoc) -> ImplCategory {
-    match impl_doc.trait_name.as_deref() {
-        None => ImplCategory::Inherent,
-        Some(name) if MARKER_TRAITS.contains(&name) => ImplCategory::MarkerTrait,
-        Some(name) if DERIVED_TRAITS.contains(&name) => ImplCategory::DerivedTrait,
-        Some(_) => ImplCategory::ManualTrait,
-    }
 }
 
 /// Items collected for a single zone (public or private).
@@ -540,43 +495,81 @@ fn render_internal_sections(
 }
 
 fn render_internal_zone(out: &mut String, zone: &InternalZoneItems<'_>, is_private: bool) {
-    render_zone_structs_section(out, &zone.structs, is_private);
-    render_zone_enums_section(out, &zone.enums, is_private);
+    render_zone_type_aliases_section(out, &zone.type_aliases, is_private);
+    render_zone_constants_section(out, &zone.constants, is_private);
+    render_zone_structs_section(out, &zone.structs, &zone.impls, is_private);
+    render_zone_enums_section(out, &zone.enums, &zone.impls, is_private);
     render_zone_traits_section(out, &zone.traits, is_private);
     render_zone_impls_section(out, &zone.impls, is_private);
     render_zone_functions_section(out, &zone.functions, is_private);
-    render_zone_type_aliases_section(out, &zone.type_aliases, is_private);
-    render_zone_constants_section(out, &zone.constants, is_private);
     render_zone_statics_section(out, &zone.statics, is_private);
 }
 
-fn render_zone_structs_section(out: &mut String, structs: &[&StructDoc], is_private: bool) {
+fn render_zone_structs_section(
+    out: &mut String,
+    structs: &[&StructDoc],
+    impls: &[RenderedImplZone<'_>],
+    is_private: bool,
+) {
     if structs.is_empty() {
         return;
     }
     let _ = writeln!(out, "## {}\n", zone_section_title("Structs", is_private));
     for item in structs {
-        let _ = writeln!(out, "### `{}`\n", naming::short_name(&item.qualified_name));
-        if let Some(ref docs) = item.docs {
-            render_docs_paragraph(out, docs);
+        let _ = writeln!(out, "```rust");
+        if !item.derived_traits.is_empty() {
+            let _ = writeln!(out, "#[derive({})]", item.derived_traits.join(", "));
         }
-        let _ = writeln!(out, "```rust\n{}\n```\n", item.signature);
-        render_field_notes(out, &item.fields);
+        if let Some(ref docs) = item.docs {
+            write_doc_comments(out, Some(docs), "");
+        }
+        let _ = writeln!(out, "{}", item.signature);
+        let _ = writeln!(out, "```\n");
+
+        // Group trait implementations under this type
+        let short_name = naming::short_name(&item.qualified_name);
+        for zone in impls {
+            if zone.impl_doc.trait_name.is_some() && zone.impl_doc.target_name == short_name {
+                let _ = writeln!(out, "```rust");
+                let _ = write!(out, "{}", render_impl_block_from_zone(zone));
+                out.push('\n');
+                let _ = writeln!(out, "```\n");
+            }
+        }
     }
 }
 
-fn render_zone_enums_section(out: &mut String, enums: &[&EnumDoc], is_private: bool) {
+fn render_zone_enums_section(
+    out: &mut String,
+    enums: &[&EnumDoc],
+    impls: &[RenderedImplZone<'_>],
+    is_private: bool,
+) {
     if enums.is_empty() {
         return;
     }
     let _ = writeln!(out, "## {}\n", zone_section_title("Enums", is_private));
     for item in enums {
-        let _ = writeln!(out, "### `{}`\n", naming::short_name(&item.qualified_name));
-        if let Some(ref docs) = item.docs {
-            render_docs_paragraph(out, docs);
+        let _ = writeln!(out, "```rust");
+        if !item.derived_traits.is_empty() {
+            let _ = writeln!(out, "#[derive({})]", item.derived_traits.join(", "));
         }
-        let _ = writeln!(out, "```rust\n{}\n```\n", item.signature);
-        render_variant_notes(out, &item.variants);
+        if let Some(ref docs) = item.docs {
+            write_doc_comments(out, Some(docs), "");
+        }
+        let _ = writeln!(out, "{}", item.signature);
+        let _ = writeln!(out, "```\n");
+
+        // Group trait implementations under this type
+        let short_name = naming::short_name(&item.qualified_name);
+        for zone in impls {
+            if zone.impl_doc.trait_name.is_some() && zone.impl_doc.target_name == short_name {
+                let _ = writeln!(out, "```rust");
+                let _ = write!(out, "{}", render_impl_block_from_zone(zone));
+                out.push('\n');
+                let _ = writeln!(out, "```\n");
+            }
+        }
     }
 }
 
@@ -586,113 +579,34 @@ fn render_zone_traits_section(out: &mut String, traits: &[&TraitDoc], is_private
     }
     let _ = writeln!(out, "## {}\n", zone_section_title("Traits", is_private));
     for item in traits {
-        let _ = writeln!(out, "### `{}`\n", naming::short_name(&item.qualified_name));
+        let _ = writeln!(out, "```rust");
         if let Some(ref docs) = item.docs {
-            render_docs_paragraph(out, docs);
+            write_doc_comments(out, Some(docs), "");
         }
-        let _ = writeln!(out, "```rust\n{}\n```\n", item.signature);
-        render_method_notes(out, &item.methods);
+        let _ = writeln!(out, "{}", item.signature);
+        let _ = writeln!(out, "```\n");
     }
 }
 
 fn render_zone_impls_section(out: &mut String, impls: &[RenderedImplZone<'_>], is_private: bool) {
-    if impls.is_empty() {
+    // Only render inherent impls here; trait impls are grouped under their target types.
+    let inherent: Vec<_> = impls
+        .iter()
+        .filter(|z| z.impl_doc.trait_name.is_none())
+        .collect();
+
+    if inherent.is_empty() {
         return;
     }
 
-    let _ = writeln!(
-        out,
-        "## {}\n",
-        zone_section_title("Impl Blocks", is_private)
-    );
+    let _ = writeln!(out, "## {}\n", zone_section_title("Impl", is_private));
 
-    // Group and sort by category
-    let mut categorized: Vec<(ImplCategory, &RenderedImplZone<'_>)> = impls
-        .iter()
-        .map(|z| (impl_category(z.impl_doc), z))
-        .collect();
-    categorized.sort_by(|a, b| {
-        a.0.cmp(&b.0).then_with(|| {
-            a.1.impl_doc
-                .target_name
-                .cmp(&b.1.impl_doc.target_name)
-                .then_with(|| {
-                    a.1.impl_doc
-                        .trait_name
-                        .as_deref()
-                        .unwrap_or("")
-                        .cmp(b.1.impl_doc.trait_name.as_deref().unwrap_or(""))
-                })
-                .then_with(|| a.1.impl_doc.header.cmp(&b.1.impl_doc.header))
-        })
-    });
-
-    let has_inherent = categorized
-        .iter()
-        .any(|(c, _)| *c == ImplCategory::Inherent);
-    let has_manual = categorized
-        .iter()
-        .any(|(c, _)| *c == ImplCategory::ManualTrait);
-    let has_derived = categorized
-        .iter()
-        .any(|(c, _)| *c == ImplCategory::DerivedTrait);
-    let has_marker = categorized
-        .iter()
-        .any(|(c, _)| *c == ImplCategory::MarkerTrait);
-
-    let mut prev_category: Option<ImplCategory> = None;
-    for (category, zone) in &categorized {
-        // Insert divider lines between groups
-        if prev_category.is_some() && prev_category != Some(*category) {
-            match category {
-                ImplCategory::ManualTrait if has_manual => {
-                    let _ = writeln!(out, "// Trait implementations\n");
-                }
-                ImplCategory::DerivedTrait if has_derived => {
-                    let _ = writeln!(out, "// Derived trait implementations\n");
-                }
-                ImplCategory::MarkerTrait if has_marker => {
-                    let _ = writeln!(out, "// Marker trait implementations\n");
-                }
-                _ => {}
-            }
-        } else if prev_category.is_none() && *category != ImplCategory::Inherent {
-            // First group is not inherent; still emit divider if appropriate
-            match category {
-                ImplCategory::ManualTrait => {
-                    if has_inherent {
-                        let _ = writeln!(out, "// Trait implementations\n");
-                    }
-                }
-                ImplCategory::DerivedTrait => {
-                    let _ = writeln!(out, "// Derived trait implementations\n");
-                }
-                ImplCategory::MarkerTrait => {
-                    let _ = writeln!(out, "// Marker trait implementations\n");
-                }
-                _ => {}
-            }
-        }
-
-        let _ = writeln!(
-            out,
-            "### `{}`\n",
-            zone.impl_doc
-                .header
-                .lines()
-                .next()
-                .unwrap_or(&zone.impl_doc.header)
-        );
-        if let Some(ref docs) = zone.impl_doc.docs {
-            render_docs_paragraph(out, docs);
-        }
-        let _ = writeln!(out, "```rust\n{}\n```\n", render_impl_block_from_zone(zone));
-
-        prev_category = Some(*category);
+    for zone in &inherent {
+        let _ = writeln!(out, "```rust");
+        let _ = write!(out, "{}", render_impl_block_from_zone(zone));
+        out.push('\n');
+        let _ = writeln!(out, "```\n");
     }
-
-    // Suppress unused variable warnings
-    let _ = (has_inherent, has_manual, has_derived, has_marker);
 }
 
 fn render_impl_block_from_zone(zone: &RenderedImplZone<'_>) -> String {
@@ -786,48 +700,70 @@ fn render_types_summary_section(
     enums: &[EnumDoc],
     traits: &[TraitDoc],
 ) {
-    let mut lines = Vec::new();
-    lines.extend(
-        traits
-            .iter()
-            .map(|item| summarize_type_signature(&item.signature, TypeKind::Trait)),
-    );
-    lines.extend(
-        structs
-            .iter()
-            .map(|item| summarize_type_signature(&item.signature, TypeKind::Struct)),
-    );
-    lines.extend(
-        enums
-            .iter()
-            .map(|item| summarize_type_signature(&item.signature, TypeKind::Enum)),
-    );
-
-    if lines.is_empty() {
+    if structs.is_empty() && enums.is_empty() && traits.is_empty() {
         return;
     }
 
     let _ = writeln!(out, "## Types\n");
     let _ = writeln!(out, "```rust");
-    for line in lines {
-        let _ = writeln!(out, "{line}");
+
+    // Traits with methods inline
+    for item in traits {
+        let _ = write!(out, "{}", item.signature);
+        out.push('\n');
     }
+
+    // Structs with #[derive(...)] annotation
+    for item in structs {
+        if !item.derived_traits.is_empty() {
+            let _ = writeln!(out, "#[derive({})]", item.derived_traits.join(", "));
+        }
+        let _ = writeln!(
+            out,
+            "{}",
+            summarize_type_signature(&item.signature, TypeKind::Struct)
+        );
+    }
+
+    // Enums with #[derive(...)] annotation
+    for item in enums {
+        if !item.derived_traits.is_empty() {
+            let _ = writeln!(out, "#[derive({})]", item.derived_traits.join(", "));
+        }
+        let _ = writeln!(
+            out,
+            "{}",
+            summarize_type_signature(&item.signature, TypeKind::Enum)
+        );
+    }
+
     let _ = writeln!(out, "```");
     out.push('\n');
 }
 
-fn render_impl_headers_section(out: &mut String, impls: &[ImplDoc]) {
-    if impls.is_empty() {
+/// Render inherent impl blocks (no trait impls) with methods expanded for surface view.
+fn render_surface_inherent_impls_section(out: &mut String, impls: &[ImplDoc]) {
+    let inherent: Vec<_> = impls
+        .iter()
+        .filter(|imp| imp.trait_name.is_none())
+        .filter(|imp| !imp.methods.is_empty())
+        .collect();
+
+    if inherent.is_empty() {
         return;
     }
 
-    let _ = writeln!(out, "## Impl Blocks\n");
-    let _ = writeln!(out, "```rust");
-    for impl_doc in impls {
-        let _ = writeln!(out, "{}", ensure_decl_terminated(&impl_doc.header));
+    let _ = writeln!(out, "## Impl\n");
+    for impl_doc in &inherent {
+        let _ = writeln!(out, "```rust");
+        let _ = write!(out, "{}", impl_doc.header);
+        out.push_str(" {\n");
+        for method in &impl_doc.methods {
+            let _ = writeln!(out, "    {}", ensure_decl_terminated(&method.signature));
+        }
+        out.push_str("}\n");
+        let _ = writeln!(out, "```\n");
     }
-    let _ = writeln!(out, "```");
-    out.push('\n');
 }
 
 fn render_signature_block_section<'a, I>(
@@ -873,7 +809,6 @@ fn render_signature_block_section<'a, I>(
 enum TypeKind {
     Struct,
     Enum,
-    Trait,
 }
 
 fn summarize_type_signature(signature: &str, kind: TypeKind) -> String {
@@ -888,7 +823,7 @@ fn summarize_type_signature(signature: &str, kind: TypeKind) -> String {
                 .map(|d| d + offset)
                 .unwrap_or(trimmed.len())
         }
-        TypeKind::Enum | TypeKind::Trait => trimmed.find('{').unwrap_or(trimmed.len()),
+        TypeKind::Enum => trimmed.find('{').unwrap_or(trimmed.len()),
     };
     let summary = trimmed[..body_delim].trim_end();
     let mut summary = summary.to_string();
@@ -937,87 +872,6 @@ fn write_doc_comments(out: &mut String, docs: Option<&str>, indent: &str) {
     }
 }
 
-fn render_field_notes(out: &mut String, fields: &[FieldDoc]) {
-    let documented: Vec<_> = fields
-        .iter()
-        .filter(|field| {
-            field
-                .docs
-                .as_ref()
-                .is_some_and(|docs| !docs.trim().is_empty())
-        })
-        .collect();
-    if documented.is_empty() {
-        return;
-    }
-
-    let _ = writeln!(out, "#### Fields\n");
-    for field in documented {
-        let docs = field
-            .docs
-            .as_deref()
-            .unwrap_or("")
-            .trim()
-            .replace('\n', " ");
-        let _ = writeln!(out, "- `{}`: {}", field.name, docs);
-    }
-    out.push('\n');
-}
-
-fn render_variant_notes(out: &mut String, variants: &[VariantDoc]) {
-    let documented: Vec<_> = variants
-        .iter()
-        .filter(|variant| {
-            variant
-                .docs
-                .as_ref()
-                .is_some_and(|docs| !docs.trim().is_empty())
-        })
-        .collect();
-    if documented.is_empty() {
-        return;
-    }
-
-    let _ = writeln!(out, "#### Variants\n");
-    for variant in documented {
-        let docs = variant
-            .docs
-            .as_deref()
-            .unwrap_or("")
-            .trim()
-            .replace('\n', " ");
-        let _ = writeln!(out, "- `{}`: {}", variant.name, docs);
-    }
-    out.push('\n');
-}
-
-fn render_method_notes(out: &mut String, methods: &[MethodDoc]) {
-    let documented: Vec<_> = methods
-        .iter()
-        .filter(|method| {
-            method
-                .docs
-                .as_ref()
-                .is_some_and(|docs| !docs.trim().is_empty())
-        })
-        .collect();
-    if documented.is_empty() {
-        return;
-    }
-
-    let _ = writeln!(out, "#### Methods\n");
-    for method in documented {
-        let docs = method
-            .docs
-            .as_deref()
-            .unwrap_or("")
-            .trim()
-            .replace('\n', " ");
-        let _ = writeln!(out, "- `{}`: {}", method.name, docs);
-    }
-    out.push('\n');
-}
-
 fn synopsis_text(docs: &Option<String>) -> Option<String> {
     naming::synopsis(docs)
 }
@@ -1048,11 +902,8 @@ mod tests {
     #[test]
     fn test_crate_page_no_items() {
         let doc = empty_crate_doc("mycrate");
-        let page = render_crate_page(&doc, ViewKind::Surface, &BTreeSet::new());
-        assert_eq!(
-            page,
-            "# Crate `mycrate`\n\n[Internal view](index.internal.md)\n\n"
-        );
+        let page = render_crate_page(&doc, &BTreeSet::new());
+        assert_eq!(page, "# Crate `mycrate`\n\n");
     }
 
     #[test]
@@ -1113,7 +964,7 @@ mod tests {
     }
 
     #[test]
-    fn test_surface_page_uses_summary_sections() {
+    fn test_crate_page_renders_internal_view() {
         let mut doc = empty_crate_doc("mycrate");
         doc.structs.push(StructDoc {
             qualified_name: "mycrate::Greeter".to_string(),
@@ -1126,6 +977,7 @@ mod tests {
                 is_public: true,
             }],
             is_public: true,
+            derived_traits: Vec::new(),
         });
         doc.functions.push(FunctionDoc {
             qualified_name: "mycrate::run".to_string(),
@@ -1148,18 +1000,24 @@ mod tests {
             }],
         });
 
-        let page = render_crate_page(&doc, ViewKind::Surface, &BTreeSet::new());
-        assert!(page.contains("## Types"));
-        assert!(page.contains("pub struct Greeter;"));
-        assert!(page.contains("pub fn run() -> String;"));
-        assert!(page.contains("impl Greeter;"));
-        assert!(!page.contains("Field docs."));
-        assert!(!page.contains("Method docs."));
+        let page = render_crate_page(&doc, &BTreeSet::new());
+        // Title has no "Internal" prefix
+        assert!(page.contains("# Crate `mycrate`"));
+        assert!(!page.contains("Internal Crate"));
+        // No cross-link to internal view
+        assert!(!page.contains("[Internal view]"));
+        // Internal format: full detail with inline doc comments
+        assert!(page.contains("## Structs"));
+        assert!(page.contains("/// Greeter docs."));
+        assert!(page.contains("pub struct Greeter"));
+        assert!(page.contains("impl Greeter {"));
+        assert!(page.contains("/// Method docs."));
+        assert!(page.contains("pub fn new(name: &str) -> Self;"));
         assert!(!page.contains("#### Fields"));
     }
 
     #[test]
-    fn test_internal_page_keeps_detailed_sections() {
+    fn test_crate_page_detailed_sections() {
         let mut doc = empty_crate_doc("mycrate");
         doc.structs.push(StructDoc {
             qualified_name: "mycrate::Greeter".to_string(),
@@ -1172,13 +1030,16 @@ mod tests {
                 is_public: true,
             }],
             is_public: true,
+            derived_traits: Vec::new(),
         });
 
-        let page = render_crate_page(&doc, ViewKind::Internal, &BTreeSet::new());
+        let page = render_crate_page(&doc, &BTreeSet::new());
         assert!(page.contains("## Structs"));
-        assert!(page.contains("Greeter docs."));
-        assert!(page.contains("#### Fields"));
-        assert!(page.contains("Field docs."));
+        // Internal view renders docs as inline /// comments in code blocks
+        assert!(page.contains("/// Greeter docs."));
+        assert!(page.contains("pub struct Greeter"));
+        // No ### or #### headings in the new format
+        assert!(!page.contains("#### Fields"));
     }
 
     #[test]
@@ -1189,76 +1050,6 @@ mod tests {
             zone_section_title("Impl Blocks", true),
             "Impl Blocks (private)"
         );
-    }
-
-    #[test]
-    fn test_impl_category_inherent() {
-        let doc = ImplDoc {
-            header: "impl Foo".to_string(),
-            docs: None,
-            methods: Vec::new(),
-            target_name: "Foo".to_string(),
-            target_is_public: true,
-            trait_name: None,
-            trait_is_public: None,
-        };
-        assert_eq!(impl_category(&doc), ImplCategory::Inherent);
-    }
-
-    #[test]
-    fn test_impl_category_manual_trait() {
-        let doc = ImplDoc {
-            header: "impl Render for Foo".to_string(),
-            docs: None,
-            methods: Vec::new(),
-            target_name: "Foo".to_string(),
-            target_is_public: true,
-            trait_name: Some("Render".to_string()),
-            trait_is_public: Some(true),
-        };
-        assert_eq!(impl_category(&doc), ImplCategory::ManualTrait);
-    }
-
-    #[test]
-    fn test_impl_category_derived_trait() {
-        let doc = ImplDoc {
-            header: "impl Debug for Foo".to_string(),
-            docs: None,
-            methods: Vec::new(),
-            target_name: "Foo".to_string(),
-            target_is_public: true,
-            trait_name: Some("Debug".to_string()),
-            trait_is_public: Some(true),
-        };
-        assert_eq!(impl_category(&doc), ImplCategory::DerivedTrait);
-    }
-
-    #[test]
-    fn test_impl_category_marker_trait() {
-        let doc = ImplDoc {
-            header: "impl Send for Foo".to_string(),
-            docs: None,
-            methods: Vec::new(),
-            target_name: "Foo".to_string(),
-            target_is_public: true,
-            trait_name: Some("Send".to_string()),
-            trait_is_public: Some(true),
-        };
-        assert_eq!(impl_category(&doc), ImplCategory::MarkerTrait);
-    }
-
-    #[test]
-    fn test_impl_category_copy_is_derived_not_marker() {
-        let doc = ImplDoc {
-            header: "impl Copy for Foo".to_string(),
-            docs: None,
-            methods: Vec::new(),
-            target_name: "Foo".to_string(),
-            target_is_public: true,
-            trait_name: Some("Copy".to_string()),
-            trait_is_public: Some(true),
-        };
-        assert_eq!(impl_category(&doc), ImplCategory::DerivedTrait);
     }
 
     #[test]
@@ -1344,6 +1135,7 @@ mod tests {
             signature: "pub struct Foo;".to_string(),
             fields: Vec::new(),
             is_public: true,
+            derived_traits: Vec::new(),
         }];
         let zones = partition_internal_page(&structs, &[], &[], &[], &[], &[], &[], &[]);
         assert!(zones.public.has_any());
@@ -1365,7 +1157,7 @@ mod tests {
             signature: "fn priv_fn()".to_string(),
             is_public: false,
         });
-        let page = render_crate_page(&doc, ViewKind::Internal, &BTreeSet::new());
+        let page = render_crate_page(&doc, &BTreeSet::new());
         assert!(
             page.contains("## Functions\n"),
             "Should have public functions section"

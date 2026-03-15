@@ -190,9 +190,10 @@ fn test_generate_defaults_to_docs_modql() {
         "Expected default output file to exist: {}",
         out_dir.join("index.md").display()
     );
+    // Crate-level index is a single merged page; no separate index.internal.md
     assert!(
-        out_dir.join("index.internal.md").exists(),
-        "Expected internal output file to exist: {}",
+        !out_dir.join("index.internal.md").exists(),
+        "Should not generate index.internal.md: {}",
         out_dir.join("index.internal.md").display()
     );
 

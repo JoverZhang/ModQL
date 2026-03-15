@@ -7,8 +7,6 @@
 ```rust
 pub fn crate_index_file() -> &'static str;
 
-pub fn internal_crate_index_file() -> &'static str;
-
 pub fn internal_module_file_name(qualified_name: &str) -> String;
 
 pub fn module_file_name(qualified_name: &str) -> String;

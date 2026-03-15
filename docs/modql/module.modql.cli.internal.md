@@ -4,35 +4,11 @@
 
 ## Structs
 
-### `Cli`
-
 ```rust
 pub struct Cli {
     pub command: Command,
 }
 ```
-
-## Enums
-
-### `Command`
-
-```rust
-pub enum Command {
-    Generate {
-        manifest_path: PathBuf,
-        out: PathBuf,
-        nightly: String,
-    },
-}
-```
-
-#### Variants
-
-- `Generate`: Generate Markdown documentation from a Rust crate or workspace
-
-## Impl Blocks
-
-### `impl Args for Cli`
 
 ```rust
 impl Args for Cli {
@@ -45,8 +21,6 @@ impl Args for Cli {
 }
 ```
 
-### `impl CommandFactory for Cli`
-
 ```rust
 impl CommandFactory for Cli {
     fn command<'b>() -> Command;
@@ -55,8 +29,6 @@ impl CommandFactory for Cli {
 
 }
 ```
-
-### `impl FromArgMatches for Cli`
 
 ```rust
 impl FromArgMatches for Cli {
@@ -71,13 +43,21 @@ impl FromArgMatches for Cli {
 }
 ```
 
-### `impl Parser for Cli`
-
 ```rust
 impl Parser for Cli;
 ```
 
-### `impl FromArgMatches for Command`
+## Enums
+
+```rust
+pub enum Command {
+    Generate {
+        manifest_path: PathBuf,
+        out: PathBuf,
+        nightly: String,
+    },
+}
+```
 
 ```rust
 impl FromArgMatches for Command {
@@ -92,8 +72,6 @@ impl FromArgMatches for Command {
 }
 ```
 
-### `impl Subcommand for Command`
-
 ```rust
 impl Subcommand for Command {
     fn augment_subcommands<'b>(__clap_app: Command) -> Command;
@@ -103,43 +81,5 @@ impl Subcommand for Command {
     fn has_subcommand(__clap_name: &str) -> bool;
 
 }
-```
-
-// Marker trait implementations
-
-### `impl Send for Cli`
-
-```rust
-impl Send for Cli;
-```
-
-### `impl Sync for Cli`
-
-```rust
-impl Sync for Cli;
-```
-
-### `impl Unpin for Cli`
-
-```rust
-impl Unpin for Cli;
-```
-
-### `impl Send for Command`
-
-```rust
-impl Send for Command;
-```
-
-### `impl Sync for Command`
-
-```rust
-impl Sync for Command;
-```
-
-### `impl Unpin for Command`
-
-```rust
-impl Unpin for Command;
 ```
 

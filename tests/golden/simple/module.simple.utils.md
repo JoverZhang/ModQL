@@ -4,17 +4,17 @@
 
 Utility functions for the simple crate.
 
-## Functions
-
-```rust
-pub fn helper(value: &str) -> String;
-
-```
-
 ## Constants
 
 ```rust
 pub const UTIL_VERSION: u32 = 1u32;
+
+```
+
+## Functions
+
+```rust
+pub fn helper(value: &str) -> String;
 
 ```
 

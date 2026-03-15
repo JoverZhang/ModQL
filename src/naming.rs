@@ -21,11 +21,6 @@ pub fn crate_index_file() -> &'static str {
     "index.md"
 }
 
-/// The internal crate index page file name.
-pub fn internal_crate_index_file() -> &'static str {
-    "index.internal.md"
-}
-
 /// Extract the first sentence from documentation text, for use as a synopsis
 /// in listing pages.
 pub fn synopsis(docs: &Option<String>) -> Option<String> {
@@ -92,11 +87,6 @@ mod tests {
     #[test]
     fn test_crate_index() {
         assert_eq!(crate_index_file(), "index.md");
-    }
-
-    #[test]
-    fn test_internal_crate_index() {
-        assert_eq!(internal_crate_index_file(), "index.internal.md");
     }
 
     #[test]

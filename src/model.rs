@@ -71,6 +71,8 @@ pub struct StructDoc {
     pub signature: String,
     pub fields: Vec<FieldDoc>,
     pub is_public: bool,
+    /// Trait names inferred from derived (synthetic) trait impls, e.g. `["Debug", "Clone"]`.
+    pub derived_traits: Vec<String>,
 }
 
 /// An enum with its variants, inherent methods, and signature.
@@ -81,6 +83,8 @@ pub struct EnumDoc {
     pub signature: String,
     pub variants: Vec<VariantDoc>,
     pub is_public: bool,
+    /// Trait names inferred from derived (synthetic) trait impls, e.g. `["Debug", "Clone"]`.
+    pub derived_traits: Vec<String>,
 }
 
 /// A trait with its required and provided methods.

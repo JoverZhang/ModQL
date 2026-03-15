@@ -276,30 +276,34 @@ fn dispatch_item<C: ItemContainer>(
             let fields =
                 collect_struct_fields(krate, s, show_members, policy.include_private_members);
             let sig = render_struct_sig(name, s, &fields, &item.visibility);
-            container
-                .impls_mut()
-                .extend(collect_assoc_impl_docs(krate, &s.impls, mode, policy));
+            let derived_traits = collect_derived_trait_names(krate, &s.impls);
+            let mut assoc_impls = collect_assoc_impl_docs(krate, &s.impls, mode, policy);
+            assoc_impls.retain(|imp| !is_derived_or_marker_impl(imp));
+            container.impls_mut().extend(assoc_impls);
             container.structs_mut().push(StructDoc {
                 qualified_name: qualified,
                 docs: item.docs.clone(),
                 signature: sig,
                 fields,
                 is_public: is_pub,
+                derived_traits,
             });
         }
         ItemEnum::Enum(e) => {
             let is_pub = is_public_visibility(&item.visibility);
             let variants = collect_enum_variants(krate, e);
             let sig = render_enum_sig(name, e, &variants, &item.visibility);
-            container
-                .impls_mut()
-                .extend(collect_assoc_impl_docs(krate, &e.impls, mode, policy));
+            let derived_traits = collect_derived_trait_names(krate, &e.impls);
+            let mut assoc_impls = collect_assoc_impl_docs(krate, &e.impls, mode, policy);
+            assoc_impls.retain(|imp| !is_derived_or_marker_impl(imp));
+            container.impls_mut().extend(assoc_impls);
             container.enums_mut().push(EnumDoc {
                 qualified_name: qualified,
                 docs: item.docs.clone(),
                 signature: sig,
                 variants,
                 is_public: is_pub,
+                derived_traits,
             });
         }
         ItemEnum::Trait(t) => {
@@ -363,7 +367,9 @@ fn dispatch_item<C: ItemContainer>(
         }
         ItemEnum::Impl(impl_) => {
             if let Some(doc) = collect_impl_doc(krate, item, impl_, mode, policy) {
-                container.impls_mut().push(doc);
+                if !is_derived_or_marker_impl(&doc) {
+                    container.impls_mut().push(doc);
+                }
             }
         }
         _ => {
@@ -580,6 +586,43 @@ const DERIVED_TRAITS: &[&str] = &[
 
 /// Marker/auto traits that should be allowed through the synthetic/span filter.
 const MARKER_TRAITS: &[&str] = &["Send", "Sync", "Sized", "Unpin"];
+
+/// Check whether an `ImplDoc` is a derived or marker trait implementation.
+fn is_derived_or_marker_impl(imp: &ImplDoc) -> bool {
+    match imp.trait_name.as_deref() {
+        Some(name) => DERIVED_TRAITS.contains(&name) || MARKER_TRAITS.contains(&name),
+        None => false,
+    }
+}
+
+/// Scan associated impl IDs and collect trait names for derived (synthetic) impls.
+fn collect_derived_trait_names(krate: &Crate, impl_ids: &[Id]) -> Vec<String> {
+    let mut names: Vec<String> = impl_ids
+        .iter()
+        .filter_map(|id| krate.index.get(id))
+        .filter_map(|item| match &item.inner {
+            ItemEnum::Impl(impl_) => {
+                // Only consider synthetic impls (or impls with no span, which are auto-derived)
+                if !impl_.is_synthetic && item.span.is_some() {
+                    return None;
+                }
+                let trait_name = impl_
+                    .trait_
+                    .as_ref()
+                    .map(|path| short_type_path(&path.path))?;
+                if DERIVED_TRAITS.contains(&trait_name.as_str()) {
+                    Some(trait_name)
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        })
+        .collect();
+    names.sort();
+    names.dedup();
+    names
+}
 
 fn collect_impl_doc(
     krate: &Crate,

@@ -1,7 +1,5 @@
 # Crate `service`
 
-[Internal view](index.internal.md)
-
 Service layer for business logic.
 
 This crate implements the application's core use cases on top of the
@@ -9,28 +7,54 @@ This crate implements the application's core use cases on top of the
 
 ## Modules
 
-| Module | Summary | Internal |
+| Module | Summary | Surface |
 |---|---|---|
-| [`handler`](module.service.handler.md) | Request handlers for the service layer. | [internal](module.service.handler.internal.md) |
+| [`handler`](module.service.handler.internal.md) | Request handlers for the service layer. | [surface](module.service.handler.md) |
 
-## Types
+## Structs
 
 ```rust
-pub struct UserStore;
-pub(crate) struct ServiceConfig;
+/// An in-memory user store.
+pub struct UserStore {
+    users: Vec<User>,
+}
+```
+
+```rust
+impl Describable for UserStore {
+    /// Describes the user store with its current size.
+    fn describe(&self) -> String;
+
+}
+```
+
+```rust
+impl Repository for UserStore {
+    /// Look up a user by id.
+    fn get(&self, id: Id) -> Result<Option<User>, String>;
+
+    /// Store a user, returning the assigned id.
+    fn save(&mut self, item: &User) -> Result<Id, String>;
+
+}
 ```
 
 ## Functions
 
 ```rust
+/// Initialize the service layer with an empty user store.
 pub fn init() -> UserStore;
 
 ```
 
-## Impl Blocks
+---
+
+## Structs (private)
 
 ```rust
-impl Describable for UserStore;
-impl Repository for UserStore;
+/// Service-level configuration.
+pub(crate) struct ServiceConfig {
+    max_concurrent: usize,
+}
 ```
 

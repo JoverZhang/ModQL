@@ -6,42 +6,12 @@ Authentication and authorization handlers.
 
 ## Structs
 
-### `Token`
-
-An authentication token.
-
 ```rust
+/// An authentication token.
 pub struct Token {
     pub value: String,
     pub expires_in: u64,
 }
-```
-
-#### Fields
-
-- `value`: The raw token string.
-- `expires_in`: Seconds until expiration.
-
-## Impl Blocks
-
-// Marker trait implementations
-
-### `impl Send for Token`
-
-```rust
-impl Send for Token;
-```
-
-### `impl Sync for Token`
-
-```rust
-impl Sync for Token;
-```
-
-### `impl Unpin for Token`
-
-```rust
-impl Unpin for Token;
 ```
 
 ## Functions
