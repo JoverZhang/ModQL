@@ -6,6 +6,7 @@
 |---|---|---|
 | [`cli`](module.modql.cli.internal.md) |  | [surface](module.modql.cli.md) |
 | [`convert`](module.modql.convert.internal.md) |  | [surface](module.modql.convert.md) |
+| [`graph`](module.modql.graph.internal.md) |  | [surface](module.modql.graph.md) |
 | [`model`](module.modql.model.internal.md) |  | [surface](module.modql.model.md) |
 | [`naming`](module.modql.naming.internal.md) |  | [surface](module.modql.naming.md) |
 | [`render_md`](module.modql.render_md.internal.md) |  | [surface](module.modql.render_md.md) |

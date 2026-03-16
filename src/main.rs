@@ -1,5 +1,6 @@
 mod cli;
 mod convert;
+mod graph;
 mod model;
 mod naming;
 mod render_md;
@@ -30,6 +31,9 @@ fn generate_for_package(
 
     eprintln!("{prefix}Rendering Markdown to {}...", out_dir.display());
     render_md::render(&surface_doc, &internal_doc, out_dir)?;
+
+    eprintln!("{prefix}Building type graph...");
+    graph::generate(&krate, out_dir)?;
 
     eprintln!(
         "{prefix}Done. Documentation written to {}",

@@ -8,6 +8,9 @@
 /// The crate root page file name.
 pub fn crate_index_file() -> &'static str;
 
+/// The type dependency graph file name.
+pub fn graph_file() -> &'static str;
+
 /// Generate the file name for an internal module page.
 pub fn internal_module_file_name(qualified_name: &str) -> String;
 
